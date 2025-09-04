@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strava Running Heatmap</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            max-width: 350px;
+        }
+        .controls h3 {
+            margin: 0 0 20px 0;
+            color: #00d4ff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input, button, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #333;
+            background: #1a1a1a;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .info-box {
+            background: rgba(0, 212, 255, 0.1);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .stats {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            font-size: 14px;
+        }
+        .stat-value {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 15px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
+            font-size: 13px;
+        }
+        .error {
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: #ff4444;
+        }
+        .success {
+            background: rgba(68, 255, 68, 0.1);
+            border: 1px solid rgba(68, 255, 68, 0.3);
+            color: #44ff44;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #667eea);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .help-text {
+            font-size: 11px;
+            color: #888;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="controls">
+        <h3>🏃 Strava Heatmap</h3>
+        
+        <input type="password" id="accessToken" placeholder="Paste your Strava Access Token" />
+        <div class="help-text">Token is used securely and never stored</div>
+        
+        <label style="display: block; margin-top: 15px;">
+            Time Range:
+            <select id="timeRange" style="margin-top: 5px;">
+                <option value="0.25">Last 3 months</option>
+                <option value="0.5">Last 6 months</option>
+                <option value="1">Last year</option>
+                <option value="2" selected>Last 2 years</option>
+                <option value="5">Last 5 years</option>
+                <option value="all">All time</option>
+            </select>
+        </label>
+        
+        <div class="info-box">
+            💡 This version works by adding your token to the URL instead of headers, avoiding browser security restrictions.
+        </div>
+        
+        <button id="fetchActivities">🔥 Generate Heatmap</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div style="color: #00d4ff; margin-top: 10px;">Loading activities...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <div id="progressText" style="color: #888; font-size: 12px; margin-top: 5px;"></div>
+        </div>
+        
+        <div class="message error" id="error"></div>
+        <div class="message success" id="success"></div>
+        
+        <div class="stats" id="stats" style="display: none;">
+            <h4 style="margin: 0 0 15px 0; color: #fff;">📊 Statistics</h4>
+            <div class="stat-item">
+                <span>Total Runs:</span>
+                <span class="stat-value" id="totalRuns">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Total Distance:</span>
+                <span class="stat-value" id="totalDistance">0 km</span>
+            </div>
+            <div class="stat-item">
+                <span>Date Range:</span>
+                <span class="stat-value" id="dateRange">-</span>
+            </div>
+            <div class="stat-item">
+                <span>GPS Points:</span>
+                <span class="stat-value" id="gpsPoints">0</span>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <label>Heat Intensity: <span id="intensityValue">25</span></label>
+                <input type="range" id="intensity" class="slider" min="10" max="50" value="25" style="width: 100%;" />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([40.7128, -74.0060], 11);
+        
+        // Add dark tile layer
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            maxZoom: 19
+        }).addTo(map);
+        
+        let heatLayer = null;
+        let allPoints = [];
+        let totalActivities = 0;
+        
+        // Decode polyline from Strava
+        function decodePolyline(encoded) {
+            if (!encoded) return [];
+            const points = [];
+            let index = 0, len = encoded.length;
+            let lat = 0, lng = 0;
+            
+            while (index < len) {
+                let b, shift = 0, result = 0;
+                do {
+                    b = encoded.charCodeAt(index++) - 63;
+                    result |= (b & 0x1f) << shift;
+                    shift += 5;
+                } while (b >= 0x20);
+                let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                lat += dlat;
+                
+                shift = 0;
+                result = 0;
+                do {
+                    b = encoded.charCodeAt(index++) - 63;
+                    result |= (b & 0x1f) << shift;
+                    shift += 5;
+                } while (b >= 0x20);
+                let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+                lng += dlng;
+                
+                points.push([lat / 1e5, lng / 1e5]);
+            }
+            return points;
+        }
+        
+        // Show message
+        function showMessage(type, message) {
+            const errorEl = document.getElementById('error');
+            const successEl = document.getElementById('success');
+            
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+            
+            if (type === 'error') {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            } else if (type === 'success') {
+                successEl.textContent = message;
+                successEl.style.display = 'block';
+            }
+        }
+        
+        // Update progress
+        function updateProgress(current, total, text) {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            
+            const percentage = total > 0 ? (current / total) * 100 : 0;
+            progressBar.style.width = percentage + '%';
+            progressText.textContent = text;
+        }
+        
+        // Fetch activities using URL parameter for auth
+        async function fetchActivities(accessToken) {
+            const activities = [];
+            let page = 1;
+            const perPage = 100; // Smaller batches to avoid timeouts
+            const timeRange = document.getElementById('timeRange').value;
+            
+            let afterDate;
+            if (timeRange === 'all') {
+                afterDate = 0; // Get all activities
+            } else {
+                const years = parseFloat(timeRange);
+                afterDate = Math.floor(Date.now() / 1000) - (years * 365 * 24 * 60 * 60);
+            }
+            
+            try {
+                // First, test the token
+                updateProgress(0, 100, 'Testing access token...');
+                const testUrl = `https://www.strava.com/api/v3/athlete?access_token=${accessToken}`;
+                const testResponse = await fetch(testUrl);
+                
+                if (!testResponse.ok) {
+                    if (testResponse.status === 401) {
+                        throw new Error('Invalid or expired access token');
+                    }
+                    throw new Error(`Authentication failed (${testResponse.status})`);
+                }
+                
+                const athlete = await testResponse.json();
+                console.log(`Logged in as: ${athlete.firstname} ${athlete.lastname}`);
+                updateProgress(10, 100, `Loading activities for ${athlete.firstname}...`);
+                
+                // Fetch activities
+                let hasMore = true;
+                let totalPages = 0;
+                
+                while (hasMore) {
+                    const url = `https://www.strava.com/api/v3/athlete/activities?page=${page}&per_page=${perPage}&after=${afterDate}&access_token=${accessToken}`;
+                    
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            throw new Error('Rate limit exceeded. Please wait 15 minutes and try again.');
+                        }
+                        throw new Error(`Failed to fetch activities (${response.status})`);
+                    }
+                    
+                    const pageActivities = await response.json();
+                    
+                    if (!pageActivities || pageActivities.length === 0) {
+                        hasMore = false;
+                        break;
+                    }
+                    
+                    // Filter for runs, walks, and hikes
+                    const runs = pageActivities.filter(a => 
+                        ['Run', 'VirtualRun', 'TrailRun', 'Walk', 'Hike'].includes(a.type)
+                    );
+                    activities.push(...runs);
+                    
+                    // Update progress
+                    const progressPercent = Math.min(10 + (page * 10), 90);
+                    updateProgress(progressPercent, 100, 
+                        `Loaded ${activities.length} activities (page ${page})...`);
+                    
+                    if (pageActivities.length < perPage) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                        // Add small delay to avoid rate limiting
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                    
+                    // Safety limit
+                    if (page > 50) {
+                        console.log('Reached page limit');
+                        hasMore = false;
+                    }
+                }
+                
+                updateProgress(100, 100, `Loaded ${activities.length} activities!`);
+                return activities;
+                
+            } catch (error) {
+                console.error('Fetch error:', error);
+                throw error;
+            }
+        }
+        
+        // Process activities and create heatmap
+        function processActivities(activities) {
+            allPoints = [];
+            let totalDistance = 0;
+            let minDate = new Date();
+            let maxDate = new Date(0);
+            let validActivities = 0;
+            
+            for (const activity of activities) {
+                if (activity.map && activity.map.summary_polyline) {
+                    try {
+                        const points = decodePolyline(activity.map.summary_polyline);
+                        
+                        if (points.length > 0) {
+                            // Add points with varying intensity based on activity
+                            points.forEach(point => {
+                                allPoints.push([point[0], point[1], 0.5]);
+                            });
+                            
+                            // Add extra intensity for start/end points
+                            if (points.length > 0) {
+                                allPoints.push([points[0][0], points[0][1], 1]); // Start
+                                allPoints.push([points[points.length-1][0], points[points.length-1][1], 1]); // End
+                            }
+                            
+                            validActivities++;
+                            totalDistance += activity.distance || 0;
+                            
+                            const actDate = new Date(activity.start_date);
+                            if (actDate < minDate) minDate = actDate;
+                            if (actDate > maxDate) maxDate = actDate;
+                        }
+                    } catch (e) {
+                        console.error('Error processing activity:', e);
+                    }
+                }
+            }
+            
+            // Update stats
+            document.getElementById('totalRuns').textContent = validActivities;
+            document.getElementById('totalDistance').textContent = `${(totalDistance / 1000).toFixed(1)} km`;
+            document.getElementById('gpsPoints').textContent = allPoints.length.toLocaleString();
+            
+            if (validActivities > 0) {
+                document.getElementById('dateRange').textContent = 
+                    `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+            }
+            
+            document.getElementById('stats').style.display = 'block';
+            
+            return validActivities > 0;
+        }
+        
+        // Update heatmap
+        function updateHeatmap() {
+            if (heatLayer) {
+                map.removeLayer(heatLayer);
+            }
+            
+            if (allPoints.length === 0) return;
+            
+            const intensity = parseInt(document.getElementById('intensity').value);
+            
+            heatLayer = L.heatLayer(allPoints, {
+                radius: intensity,
+                blur: 15,
+                maxZoom: 17,
+                max: 1.0,
+                gradient: {
+                    0.0: 'transparent',
+                    0.25: 'blue',
+                    0.4: 'cyan',
+                    0.6: 'lime',
+                    0.75: 'yellow',
+                    0.9: 'orange',
+                    1.0: 'red'
+                }
+            }).addTo(map);
+            
+            // Fit map to bounds
+            const bounds = L.latLngBounds(allPoints.map(p => [p[0], p[1]]));
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+        
+        // Main button click handler
+        document.getElementById('fetchActivities').addEventListener('click', async () => {
+            const accessToken = document.getElementById('accessToken').value.trim();
+            
+            if (!accessToken) {
+                showMessage('error', '⚠️ Please enter your Strava access token');
+                return;
+            }
+            
+            const button = document.getElementById('fetchActivities');
+            const loading = document.getElementById('loading');
+            
+            button.disabled = true;
+            loading.style.display = 'block';
+            showMessage('', '');
+            
+            try {
+                const activities = await fetchActivities(accessToken);
+                
+                if (activities.length === 0) {
+                    showMessage('error', 'No running activities found in the selected time range');
+                } else {
+                    updateProgress(95, 100, 'Processing GPS data...');
+                    
+                    const hasData = processActivities(activities);
+                    
+                    if (hasData) {
+                        updateHeatmap();
+                        showMessage('success', `✅ Heatmap created with ${activities.length} activities!`);
+                        button.textContent = '🔄 Refresh Heatmap';
+                        updateProgress(100, 100, 'Complete!');
+                    } else {
+                        showMessage('error', 'No GPS data found in activities');
+                    }
+                }
+                
+            } catch (err) {
+                console.error('Error:', err);
+                showMessage('error', `❌ ${err.message}`);
+            } finally {
+                loading.style.display = 'none';
+                button.disabled = false;
+            }
+        });
+        
+        // Intensity slider
+        document.getElementById('intensity').addEventListener('input', (e) => {
+            document.getElementById('intensityValue').textContent = e.target.value;
+            if (allPoints.length > 0) {
+                updateHeatmap();
+            }
+        });
+        
+        // Try to get user's location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    map.setView([position.coords.latitude, position.coords.longitude], 13);
+                },
+                error => {
+                    console.log('Location unavailable, using default');
+                }
+            );
+        }
+    </script>
+</body>
+</html>
