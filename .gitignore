@@ -1,0 +1,35 @@
+# Strava API tokens and credentials
+strava_tokens.json
+strava_tokens_fresh.json
+strava_tokens_with_permissions.json
+.strava_tokens.json
+.strava_config.json
+
+# Any file containing access tokens
+*access_token*
+*refresh_token*
+*client_secret*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated heatmap files (optional - remove if you want to commit these)
+# my_runs_heatmap.html
+# strava_heatmap.html
