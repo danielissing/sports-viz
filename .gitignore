@@ -7,7 +7,6 @@ strava_tokens_with_permissions.json
 
 # Any file containing access tokens
 *access_token*
-*refresh_token*
 *client_secret*
 
 # Python
