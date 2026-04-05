@@ -180,16 +180,12 @@ def get_token_with_activity_scope():
     tokens = response.json()
     
     print("\n" + "="*60)
-    print("🎉 SUCCESS! NEW TOKENS WITH ACTIVITY PERMISSIONS:")
+    print("🎉 SUCCESS! TOKENS WITH ACTIVITY PERMISSIONS:")
     print("="*60)
-    
-    print(f"\n📋 ACCESS TOKEN (copy this for the HTML file):\n")
-    print(f"{tokens['access_token']}")
-    
-    print(f"\n📋 REFRESH TOKEN (save for later):\n")
-    print(f"{tokens['refresh_token']}")
-    
-    print(f"\n⏰ Token expires in: {tokens['expires_in']/3600:.1f} hours")
+
+    print(f"\n📋 CLIENT ID:      {client_id}")
+    print(f"📋 REFRESH TOKEN:  {tokens['refresh_token']}")
+    print(f"\n(Access token also received — the heatmap will refresh it automatically)")
     
     # Save tokens
     with open('strava_tokens_with_permissions.json', 'w') as f:
@@ -200,19 +196,20 @@ def get_token_with_activity_scope():
     print("\n🔍 Testing new token permissions...")
     
     # Test 1: Basic profile
+    auth_header = {'Authorization': f"Bearer {tokens['access_token']}"}
     test1 = requests.get(
-        f"https://www.strava.com/api/v3/athlete?access_token={tokens['access_token']}"
+        "https://www.strava.com/api/v3/athlete", headers=auth_header
     )
-    
+
     if test1.status_code == 200:
         athlete = test1.json()
         print(f"✅ Profile access works: {athlete.get('firstname')} {athlete.get('lastname')}")
     else:
         print(f"❌ Profile test failed: {test1.status_code}")
-    
+
     # Test 2: Activities (the important one!)
     test2 = requests.get(
-        f"https://www.strava.com/api/v3/athlete/activities?access_token={tokens['access_token']}&per_page=1"
+        "https://www.strava.com/api/v3/athlete/activities?per_page=1", headers=auth_header
     )
     
     if test2.status_code == 200:
@@ -234,12 +231,12 @@ def main():
         print("\n" + "="*60)
         print("✅ NEXT STEPS:")
         print("="*60)
-        print("1. Copy the ACCESS TOKEN above")
-        print("2. Use it in either:")
-        print("   - The HTML heatmap file")
-        print("   - The Python heatmap generator")
-        print("3. It will work because it now has activity permissions!")
-        print("\nThis new token has the right permissions to read your activities!")
+        print("1. Open strava-heatmap.html in your browser")
+        print("2. Enter your Client ID, Client Secret, and the Refresh Token above")
+        print("3. Check 'Remember credentials' so you won't need to enter them again")
+        print("4. Click 'Load Activities' — the heatmap will auto-refresh your token")
+        print("\nYou only need to run this script once. The heatmap handles token")
+        print("refresh automatically from now on.")
     else:
         print("\n❌ Failed to get proper authorization")
         print("Make sure to:")

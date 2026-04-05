@@ -1,849 +1,564 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Activity Heatmap</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-        }
-        #map {
-            height: 100vh;
-            width: 100%;
-        }
-        .controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-            max-width: 380px;
-        }
-        .controls h3 {
-            margin: 0 0 20px 0;
-            color: #fc4c02;
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        input, button, select {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border: 1px solid #ddd;
-            background: #fff;
-            color: #333;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        button {
-            background: #fc4c02;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        button:hover:not(:disabled) {
-            background: #e44002;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(252, 76, 2, 0.3);
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .map-style-buttons {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 15px 0;
-        }
-        .map-style-btn {
-            padding: 8px;
-            font-size: 12px;
-            background: #f0f0f0;
-            color: #333;
-            border: 2px solid transparent;
-        }
-        .map-style-btn.active {
-            background: #fc4c02;
-            color: white;
-            border-color: #fc4c02;
-        }
-        .sport-buttons {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 15px 0;
-        }
-        .sport-btn {
-            padding: 8px 16px;
-            font-size: 13px;
-            background: #f0f0f0;
-            color: #333;
-            border: 2px solid transparent;
-            border-radius: 20px;
-            flex: 1;
-            min-width: 80px;
-        }
-        .sport-btn.active {
-            background: #fc4c02;
-            color: white;
-            border-color: #fc4c02;
-        }
-        .sport-btn .count {
-            font-size: 11px;
-            opacity: 0.8;
-        }
-        .viz-toggle {
-            display: flex;
-            gap: 8px;
-            margin: 15px 0;
-        }
-        .viz-btn {
-            flex: 1;
-            padding: 10px;
-            background: #f0f0f0;
-            color: #333;
-            border: 2px solid transparent;
-        }
-        .viz-btn.active {
-            background: #fc4c02;
-            color: white;
-        }
-        .info-box {
-            background: #fff8f5;
-            border: 1px solid #ffd4c2;
-            border-radius: 8px;
-            padding: 12px;
-            margin: 15px 0;
-            font-size: 13px;
-            line-height: 1.4;
-        }
-        .stats {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-        }
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            margin: 12px 0;
-            font-size: 14px;
-        }
-        .stat-value {
-            color: #fc4c02;
-            font-weight: 600;
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        .spinner {
-            border: 3px solid #f0f0f0;
-            border-top: 3px solid #fc4c02;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 15px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .message {
-            padding: 12px;
-            border-radius: 8px;
-            margin: 10px 0;
-            display: none;
-            font-size: 13px;
-        }
-        .error {
-            background: #ffe5e5;
-            border: 1px solid #ffcccc;
-            color: #cc0000;
-        }
-        .success {
-            background: #e5ffe5;
-            border: 1px solid #ccffcc;
-            color: #008800;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 4px;
-            background: #f0f0f0;
-            border-radius: 2px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #fc4c02, #ff8c69);
-            width: 0%;
-            transition: width 0.3s;
-        }
-        .help-text {
-            font-size: 11px;
-            color: #666;
-            margin: 5px 0;
-        }
-        .slider-container {
-            margin: 15px 0;
-        }
-        .slider-label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-        input[type="range"] {
-            padding: 0;
-            height: 6px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strava Activity Heatmap (Auto-Update + Preserve View)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+  <style>
+    /* Make page non-scrollable and lock map to viewport */
+    html, body { height: 100%; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+    /* Map fills the entire viewport regardless of control size */
+    #map { position: fixed; inset: 0; width: 100%; height: 100%; }
+    /* Floating control panel */
+    .controls {
+      position: absolute; top: 20px; right: 20px; z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      max-width: 380px;
+      max-height: calc(100vh - 40px);
+      overflow: auto;
+    }
+    .controls h3 { margin: 0 0 20px 0; color: #fc4c02; font-size: 24px; display: flex; align-items: center; gap: 10px; }
+    input, button, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 8px; font-size: 14px; }
+    button { background: #fc4c02; color: white; border: none; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+    button:hover:not(:disabled) { background: #e44002; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(252, 76, 2, 0.3); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .map-style-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 15px 0; }
+    .map-style-btn { padding: 8px; font-size: 12px; background: #f0f0f0; color: #333; border: 2px solid transparent; }
+    .map-style-btn.active { background: #fc4c02; color: white; border-color: #fc4c02; }
+    .sport-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 15px 0; }
+    .sport-btn { padding: 8px 16px; font-size: 13px; background: #f0f0f0; color: #333; border: 2px solid transparent; border-radius: 20px; flex: 1; min-width: 80px; }
+    .sport-btn.active { background: #fc4c02; color: white; border-color: #fc4c02; }
+    .viz-toggle { display: flex; gap: 8px; margin: 15px 0; }
+    .viz-btn { flex: 1; padding: 10px; background: #f0f0f0; color: #333; border: 2px solid transparent; }
+    .viz-btn.active { background: #fc4c02; color: white; }
+    .info-box { background: #fff8f5; border: 1px solid #ffd4c2; border-radius: 8px; padding: 12px; margin: 15px 0; font-size: 13px; line-height: 1.4; }
+    .stats { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+    .stat-item { display: flex; justify-content: space-between; margin: 12px 0; font-size: 14px; }
+    .stat-value { color: #fc4c02; font-weight: 600; }
+    .loading { display: none; text-align: center; margin: 20px 0; }
+    .spinner { border: 3px solid #f0f0f0; border-top: 3px solid #fc4c02; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 15px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg);} }
+    .message { padding: 12px; border-radius: 8px; margin: 10px 0; display: none; font-size: 13px; }
+    .error { background: #ffe5e5; border: 1px solid #ffcccc; color: #cc0000; }
+    .success { background: #e5ffe5; border: 1px solid #ccffcc; color: #008800; }
+    .progress-bar { width: 100%; height: 4px; background: #f0f0f0; border-radius: 2px; overflow: hidden; margin: 10px 0; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #fc4c02, #ff8c69); width: 0%; transition: width 0.3s; }
+    .help-text { font-size: 11px; color: #666; margin: 5px 0; }
+    .slider-container { margin: 15px 0; }
+    .slider-label { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    input[type="range"] { padding: 0; height: 6px; }
+  </style>
 </head>
 <body>
-    <div id="map"></div>
+  <div id="map"></div>
 
-    <div class="controls">
-        <h3>🏃 Strava Activity Heatmap</h3>
+  <div class="controls">
+    <h3>🏃 Strava Activity Heatmap</h3>
 
-        <input type="password" id="accessToken" placeholder="Paste your Strava Access Token" />
-        <div class="help-text">Token is used securely and never stored</div>
+    <input type="text" id="clientId" placeholder="Client ID" />
+    <input type="password" id="clientSecret" placeholder="Client Secret" />
+    <input type="password" id="refreshToken" placeholder="Refresh Token" />
+    <label style="display:flex; align-items:center; gap:6px; margin:6px 0;">
+      <input type="checkbox" id="rememberCreds" style="width:auto; margin:0;" />
+      <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
+    </label>
 
-        <label style="display: block; margin-top: 15px;">
-            Time Range:
-            <select id="timeRange" style="margin-top: 5px;">
-                <option value="0.25">Last 3 months</option>
-                <option value="0.5">Last 6 months</option>
-                <option value="1">Last year</option>
-                <option value="2" selected>Last 2 years</option>
-                <option value="5">Last 5 years</option>
-                <option value="all">All time</option>
-            </select>
-        </label>
+    <label style="display:block; margin-top: 15px;">
+      Time Range:
+      <select id="timeRange" style="margin-top: 5px;">
+        <option value="0.25">Last 3 months</option>
+        <option value="0.5">Last 6 months</option>
+        <option value="1">Last year</option>
+        <option value="2" selected>Last 2 years</option>
+        <option value="5">Last 5 years</option>
+        <option value="all">All time</option>
+      </select>
+    </label>
 
-        <button id="fetchActivities">🔥 Load Activities</button>
+    <button id="fetchActivities">🔥 Load Activities</button>
 
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <div style="color: #fc4c02; margin-top: 10px;">Loading activities...</div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressBar"></div>
-            </div>
-            <div id="progressText" style="color: #666; font-size: 12px; margin-top: 5px;"></div>
-        </div>
-
-        <div class="message error" id="error"></div>
-        <div class="message success" id="success"></div>
-
-        <div id="activityControls" style="display: none;">
-            <h4 style="margin: 20px 0 10px 0;">Select Activities:</h4>
-            <div class="sport-buttons" id="sportButtons"></div>
-
-            <h4 style="margin: 20px 0 10px 0;">Map Style:</h4>
-            <div class="map-style-buttons">
-                <button class="map-style-btn active" data-style="street">Street</button>
-                <button class="map-style-btn" data-style="satellite">Satellite</button>
-                <button class="map-style-btn" data-style="terrain">Terrain</button>
-                <button class="map-style-btn" data-style="light">Light</button>
-                <button class="map-style-btn" data-style="dark">Dark</button>
-                <button class="map-style-btn" data-style="outdoors">Outdoors</button>
-            </div>
-
-            <h4 style="margin: 20px 0 10px 0;">Visualization:</h4>
-            <div class="viz-toggle">
-                <button class="viz-btn active" id="vizLines">Lines</button>
-                <button class="viz-btn" id="vizHeat">Heatmap</button>
-            </div>
-
-            <div class="slider-container">
-                <div class="slider-label">
-                    <span>Line Opacity:</span>
-                    <span id="opacityValue">30%</span>
-                </div>
-                <input type="range" id="opacity" min="10" max="100" value="30" />
-            </div>
-
-            <div class="slider-container">
-                <div class="slider-label">
-                    <span>Line Width:</span>
-                    <span id="widthValue">2</span>
-                </div>
-                <input type="range" id="lineWidth" min="1" max="5" value="2" />
-            </div>
-
-            <button id="updateMap" style="background: #4CAF50;">🔄 Update Map</button>
-        </div>
-
-        <div class="stats" id="stats" style="display: none;">
-            <h4 style="margin: 0 0 15px 0;">📊 Statistics</h4>
-            <div class="stat-item">
-                <span>Activities Shown:</span>
-                <span class="stat-value" id="totalActivities">0</span>
-            </div>
-            <div class="stat-item">
-                <span>Total Distance:</span>
-                <span class="stat-value" id="totalDistance">0 km</span>
-            </div>
-            <div class="stat-item">
-                <span>Date Range:</span>
-                <span class="stat-value" id="dateRange">-</span>
-            </div>
-            <div class="stat-item">
-                <span>GPS Routes:</span>
-                <span class="stat-value" id="routeCount">0</span>
-            </div>
-        </div>
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div style="color: #fc4c02; margin-top: 10px;">Loading activities...</div>
+      <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+      <div id="progressText" style="color: #666; font-size: 12px; margin-top: 5px;"></div>
     </div>
 
-    <script>
-        // Initialize map with street view
-        const map = L.map('map').setView([40.7128, -74.0060], 11);
+    <div class="message error" id="error"></div>
+    <div class="message success" id="success"></div>
 
-        // Map tile layers
-        const tileLayers = {
-            street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }),
-            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '© Esri',
-                maxZoom: 19
-            }),
-            terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenTopoMap contributors',
-                maxZoom: 17
-            }),
-            light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap contributors © CARTO',
-                maxZoom: 19
-            }),
-            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '© OpenStreetMap contributors © CARTO',
-                maxZoom: 19
-            }),
-            outdoors: L.tileLayer('https://{s}.tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=1d3b2a8d2e2c4ae8a48f8e7b8c9d0e1f', {
-                attribution: '© Thunderforest, © OpenStreetMap contributors',
-                maxZoom: 22
-            })
-        };
+    <div id="activityControls" style="display:none;">
+      <h4 style="margin: 20px 0 10px 0;">Select Activities:</h4>
+      <div class="sport-buttons" id="sportButtons"></div>
 
-        // Add default layer
-        let currentLayer = tileLayers.street;
+      <h4 style="margin: 20px 0 10px 0;">Map Style:</h4>
+      <div class="map-style-buttons">
+        <button class="map-style-btn" data-style="street">Street</button>
+        <button class="map-style-btn" data-style="satellite">Satellite</button>
+        <button class="map-style-btn" data-style="terrain">Terrain</button>
+        <button class="map-style-btn active" data-style="light">Light</button>
+        <button class="map-style-btn" data-style="dark">Dark</button>
+        <button class="map-style-btn" data-style="outdoors">Outdoors</button>
+      </div>
+
+      <h4 style="margin: 20px 0 10px 0;">Visualization:</h4>
+      <div class="viz-toggle">
+        <button class="viz-btn active" id="vizLines">Lines</button>
+        <button class="viz-btn" id="vizHeat">Heatmap</button>
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>Line Opacity:</span>
+          <span id="opacityValue">30%</span>
+        </div>
+        <input type="range" id="opacity" min="10" max="100" value="30" />
+      </div>
+
+      <div class="slider-container">
+        <div class="slider-label">
+          <span>Line Width:</span>
+          <span id="widthValue">2</span>
+        </div>
+        <input type="range" id="lineWidth" min="1" max="5" value="2" />
+      </div>
+
+      <button id="updateMap" style="background: #4CAF50;">🔄 Update Map</button>
+      <div class="help-text">Zoom & position are always preserved after the first fit.</div>
+    </div>
+
+    <div class="stats" id="stats" style="display:none;">
+      <h4 style="margin: 0 0 15px 0;">📊 Statistics</h4>
+      <div class="stat-item"><span>Activities Shown:</span><span class="stat-value" id="totalActivities">0</span></div>
+      <div class="stat-item"><span>Total Distance:</span><span class="stat-value" id="totalDistance">0 km</span></div>
+      <div class="stat-item"><span>Date Range:</span><span class="stat-value" id="dateRange">-</span></div>
+      <div class="stat-item"><span>GPS Routes:</span><span class="stat-value" id="routeCount">0</span></div>
+    </div>
+  </div>
+
+  <script>
+    // --- localStorage helpers ---
+    function saveSetting(key, value) {
+      try { localStorage.setItem('strava_heatmap_' + key, JSON.stringify(value)); } catch (e) { /* file:// may block */ }
+    }
+    function loadSetting(key, defaultValue) {
+      try { const v = localStorage.getItem('strava_heatmap_' + key); return v !== null ? JSON.parse(v) : defaultValue; } catch (e) { return defaultValue; }
+    }
+    function removeSetting(key) {
+      try { localStorage.removeItem('strava_heatmap_' + key); } catch (e) { /* ignore */ }
+    }
+
+    // --- Token refresh ---
+    async function refreshAccessToken(clientId, clientSecret, refreshToken) {
+      const body = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+      });
+      const resp = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        body: body
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Token refresh failed (${resp.status}): ${text}`);
+      }
+      const data = await resp.json();
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresAt: data.expires_at
+      };
+    }
+
+    const map = L.map('map').setView([40.7128, -74.0060], 11);
+
+    const tileLayers = {
+      street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+      satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 }),
+      terrain: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 }),
+      light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+      dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+      outdoors: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap contributors © OpenStreetMap contributors', maxZoom: 17 })
+    };
+    let currentLayer = tileLayers.light;
+    currentLayer.addTo(map);
+
+    // Persistent state
+    let allActivities = [];
+    let routeLayers = [];
+    let heatLayer = null;
+    let selectedSports = new Set();
+    let currentViz = 'lines';
+    let updateTimer = null;
+    let hasEverFit = false; // after first draw we always preserve view
+
+    function debounceUpdate() {
+      clearTimeout(updateTimer);
+      updateTimer = setTimeout(() => updateVisualization({ preserveView: true, fitBounds: false }), 200);
+    }
+
+    const sportColors = {
+      'Run': '#fc4c02','Ride': '#00a9e0','Swim': '#00d4aa','Hike': '#8b4513','Walk': '#ff69b4',
+      'VirtualRun': '#ff6b6b','VirtualRide': '#4ecdc4','TrailRun': '#228b22','AlpineSki': '#6495ed','BackcountrySki': '#4169e1',
+      'Canoeing': '#20b2aa','Crossfit': '#dc143c','EBikeRide': '#00ced1','Elliptical': '#da70d6','Golf': '#98fb98',
+      'Handcycle': '#ff7f50','IceSkate': '#b0e0e6','InlineSkate': '#ff1493','Kayaking': '#48d1cc','Kitesurf': '#00fa9a',
+      'NordicSki': '#87ceeb','RockClimbing': '#d2691e','RollerSki': '#ffd700','Rowing': '#4682b4','Sail': '#1e90ff',
+      'Skateboard': '#ff4500','Snowboard': '#6a5acd','Snowshoe': '#708090','Soccer': '#32cd32','StairStepper': '#ff69b4',
+      'StandUpPaddling': '#00bfff','Surfing': '#00ffff','Tennis': '#adff2f','Velomobile': '#ff00ff','Wheelchair': '#9370db',
+      'WeightTraining': '#8b0000','Windsurf': '#7fffd4','Workout': '#ffa500','Yoga': '#9932cc','Default': '#808080'
+    };
+
+    function decodePolyline(encoded) {
+      if (!encoded) return [];
+      const points = [];
+      let index = 0, len = encoded.length;
+      let lat = 0, lng = 0;
+      while (index < len) {
+        let b, shift = 0, result = 0;
+        do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1)); lat += dlat;
+        shift = 0; result = 0;
+        do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+        const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1)); lng += dlng;
+        points.push([lat / 1e5, lng / 1e5]);
+      }
+      return points;
+    }
+
+    function showMessage(type, message) {
+      const errorEl = document.getElementById('error');
+      const successEl = document.getElementById('success');
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+      if (type === 'error') { errorEl.textContent = message; errorEl.style.display = 'block'; }
+      else if (type === 'success') { successEl.textContent = message; successEl.style.display = 'block'; }
+    }
+    function updateProgress(current, total, text) {
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const percentage = total > 0 ? (current / total) * 100 : 0;
+      progressBar.style.width = percentage + '%';
+      progressText.textContent = text;
+    }
+
+    async function fetchActivities(accessToken) {
+      const activities = []; let page = 1;
+      const perPage = 100; const timeRange = document.getElementById('timeRange').value;
+      let afterDate;
+      if (timeRange === 'all') afterDate = 0;
+      else { const years = parseFloat(timeRange); afterDate = Math.floor(Date.now() / 1000) - (years * 365 * 24 * 60 * 60); }
+
+      const authHeaders = { 'Authorization': `Bearer ${accessToken}` };
+      updateProgress(0, 100, 'Testing access token...');
+      const testResponse = await fetch('https://www.strava.com/api/v3/athlete', { headers: authHeaders });
+      if (!testResponse.ok) throw new Error('Invalid or expired access token');
+      const athlete = await testResponse.json();
+      updateProgress(10, 100, `Loading activities for ${athlete.firstname}...`);
+
+      let hasMore = true;
+      while (hasMore) {
+        const url = `https://www.strava.com/api/v3/athlete/activities?page=${page}&per_page=${perPage}&after=${afterDate}`;
+        const response = await fetch(url, { headers: authHeaders });
+        if (!response.ok) {
+          if (response.status === 429) throw new Error('Rate limit exceeded. Please wait 15 minutes and try again.');
+          throw new Error(`Failed to fetch activities (${response.status})`);
+        }
+        const pageActivities = await response.json();
+        if (!pageActivities || pageActivities.length === 0) { hasMore = false; break; }
+        activities.push(...pageActivities);
+        const progressPercent = Math.min(10 + (page * 10), 90);
+        updateProgress(progressPercent, 100, `Loaded ${activities.length} activities (page ${page})...`);
+        if (pageActivities.length < perPage) { hasMore = false; } else { page++; await new Promise(r => setTimeout(r, 200)); }
+        if (page > 50) hasMore = false;
+      }
+      updateProgress(100, 100, `Loaded ${activities.length} activities!`);
+      return activities;
+    }
+
+    function createSportButtons(activities) {
+      const sportCounts = {};
+      activities.forEach(a => { if (a.type) sportCounts[a.type] = (sportCounts[a.type] || 0) + 1; });
+      const container = document.getElementById('sportButtons'); container.innerHTML = '';
+      selectedSports.clear();
+      const savedSports = loadSetting('selectedSports', null);
+      const sortedSports = Object.entries(sportCounts).sort((a, b) => b[1] - a[1]);
+      sortedSports.forEach(([sport, count]) => {
+        const btn = document.createElement('button');
+        // If we have saved selections, use them; otherwise default to all active
+        const isActive = savedSports ? savedSports.includes(sport) : true;
+        btn.className = 'sport-btn' + (isActive ? ' active' : '');
+        btn.innerHTML = `${sport} <span class="count">(${count})</span>`;
+        btn.dataset.sport = sport;
+        const color = sportColors[sport] || sportColors['Default'];
+        btn.style.borderColor = color;
+        if (isActive) selectedSports.add(sport);
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('active');
+          if (selectedSports.has(sport)) selectedSports.delete(sport); else selectedSports.add(sport);
+          saveSetting('selectedSports', [...selectedSports]);
+          debounceUpdate();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function drawRoutes() {
+      routeLayers.forEach(layer => map.removeLayer(layer));
+      routeLayers = [];
+      const opacity = document.getElementById('opacity').value / 100;
+      const weight = parseInt(document.getElementById('lineWidth').value);
+      allActivities.forEach(activity => {
+        if (!selectedSports.has(activity.type)) return;
+        if (!activity.map?.summary_polyline) return;
+        const points = decodePolyline(activity.map.summary_polyline);
+        if (points.length < 2) return;
+        const color = sportColors[activity.type] || sportColors['Default'];
+        const polyline = L.polyline(points, { color, weight, opacity, smoothFactor: 1 });
+        polyline.bindPopup(`<strong>${activity.name}</strong><br>Type: ${activity.type}<br>Date: ${new Date(activity.start_date).toLocaleDateString()}<br>Distance: ${(activity.distance / 1000).toFixed(2)} km`);
+        routeLayers.push(polyline); polyline.addTo(map);
+      });
+    }
+
+    function drawHeatmap() {
+      if (heatLayer) map.removeLayer(heatLayer);
+      const allPoints = [];
+      allActivities.forEach(activity => {
+        if (!selectedSports.has(activity.type)) return;
+        if (!activity.map?.summary_polyline) return;
+        const points = decodePolyline(activity.map.summary_polyline);
+        points.forEach(p => allPoints.push([p[0], p[1], 0.5]));
+      });
+      if (allPoints.length === 0) return;
+      if (!L.heatLayer) {
+        showMessage('error', 'Heatmap requires leaflet.heat. Uncomment the script tag near the top.');
+        return;
+      }
+      heatLayer = L.heatLayer(allPoints, { radius: 25, blur: 15, maxZoom: 17, max: 1.0, gradient: { 0.0: 'transparent', 0.25: 'blue', 0.4: 'cyan', 0.6: 'lime', 0.75: 'yellow', 0.9: 'orange', 1.0: 'red' } }).addTo(map);
+    }
+
+    function updateStats() {
+      let totalDistance = 0; let minDate = new Date(); let maxDate = new Date(0);
+      let routeCount = 0; let activityCount = 0;
+      allActivities.forEach(activity => {
+        if (!selectedSports.has(activity.type)) return;
+        activityCount++; if (activity.map?.summary_polyline) routeCount++;
+        totalDistance += activity.distance || 0;
+        const d = new Date(activity.start_date); if (d < minDate) minDate = d; if (d > maxDate) maxDate = d;
+      });
+      document.getElementById('totalActivities').textContent = activityCount;
+      document.getElementById('totalDistance').textContent = `${(totalDistance / 1000).toFixed(1)} km`;
+      document.getElementById('routeCount').textContent = routeCount;
+      document.getElementById('dateRange').textContent = activityCount > 0 ? `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}` : '-';
+    }
+
+    function updateVisualization(opts = { preserveView: true, fitBounds: false }) {
+      const preserveView = opts.preserveView !== false; // always true by default
+      let center, zoom;
+      if (preserveView) { center = map.getCenter(); zoom = map.getZoom(); }
+
+      // Clear & redraw
+      routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
+      if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+      if (currentViz === 'lines') drawRoutes(); else drawHeatmap();
+      updateStats();
+
+      // Fit bounds only once (first draw) if requested
+      if (opts.fitBounds) {
+        const bounds = [];
+        allActivities.forEach(activity => {
+          if (!selectedSports.has(activity.type)) return;
+          if (!activity.map?.summary_polyline) return;
+          const points = decodePolyline(activity.map.summary_polyline);
+          bounds.push(...points);
+        });
+        if (bounds.length > 0) { map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50] }); hasEverFit = true; }
+      }
+
+      // Restore view after draw to preserve zoom/center
+      if (preserveView && center && typeof zoom === 'number') {
+        map.setView(center, zoom, { animate: false });
+      }
+    }
+
+    // Load activities
+    document.getElementById('fetchActivities').addEventListener('click', async () => {
+      const clientId = document.getElementById('clientId').value.trim();
+      const clientSecret = document.getElementById('clientSecret').value.trim();
+      const refreshTokenVal = document.getElementById('refreshToken').value.trim();
+      if (!clientId || !clientSecret || !refreshTokenVal) {
+        showMessage('error', '⚠️ Please enter Client ID, Client Secret, and Refresh Token');
+        return;
+      }
+
+      const button = document.getElementById('fetchActivities');
+      const loading = document.getElementById('loading');
+
+      const prevCenter = map.getCenter();
+      const prevZoom = map.getZoom();
+
+      button.disabled = true; loading.style.display = 'block'; showMessage('', '');
+      try {
+        // Refresh the access token
+        const tokens = await refreshAccessToken(clientId, clientSecret, refreshTokenVal);
+        // If Strava rotated the refresh token, update UI + storage
+        if (tokens.refreshToken !== refreshTokenVal) {
+          document.getElementById('refreshToken').value = tokens.refreshToken;
+          if (document.getElementById('rememberCreds').checked) {
+            saveSetting('refreshToken', tokens.refreshToken);
+          }
+        }
+        // Persist credentials if checkbox is checked
+        if (document.getElementById('rememberCreds').checked) {
+          saveSetting('clientId', clientId);
+          saveSetting('clientSecret', clientSecret);
+          saveSetting('refreshToken', document.getElementById('refreshToken').value.trim());
+          saveSetting('rememberCreds', true);
+        } else {
+          removeSetting('clientId');
+          removeSetting('clientSecret');
+          removeSetting('refreshToken');
+          removeSetting('rememberCreds');
+        }
+
+        allActivities = await fetchActivities(tokens.accessToken);
+        if (allActivities.length === 0) {
+          showMessage('error', 'No activities found in the selected time range');
+        } else {
+          updateProgress(95, 100, 'Processing activities...');
+          createSportButtons(allActivities);
+          document.getElementById('activityControls').style.display = 'block';
+          document.getElementById('stats').style.display = 'block';
+
+          // If this is the first time we have data, fit to bounds once. After that, always preserve current view.
+          const shouldFit = !hasEverFit;
+          updateVisualization({ preserveView: !shouldFit, fitBounds: shouldFit });
+          showMessage('success', `✅ Loaded ${allActivities.length} activities!`);
+          button.textContent = '🔄 Reload Activities';
+
+          // After initial fit, immediately restore previous view if it existed (user had been zoomed somewhere).
+          if (!shouldFit && prevCenter && typeof prevZoom === 'number') {
+            map.setView(prevCenter, prevZoom, { animate: false });
+          }
+          updateProgress(100, 100, 'Complete!');
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        showMessage('error', `❌ ${err.message}`);
+      } finally {
+        loading.style.display = 'none';
+        button.disabled = false;
+      }
+    });
+
+    // Manual update button
+    document.getElementById('updateMap').addEventListener('click', () => {
+      updateVisualization({ preserveView: true, fitBounds: false });
+      showMessage('success', '✅ Map updated!');
+    });
+
+    // Map style switcher
+    document.querySelectorAll('.map-style-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const style = btn.dataset.style;
+        document.querySelectorAll('.map-style-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        map.removeLayer(currentLayer); currentLayer = tileLayers[style]; currentLayer.addTo(map);
+        saveSetting('mapStyle', style);
+      });
+    });
+
+    // Viz toggle
+    document.getElementById('vizLines').addEventListener('click', () => {
+      currentViz = 'lines';
+      document.getElementById('vizLines').classList.add('active');
+      document.getElementById('vizHeat').classList.remove('active');
+      saveSetting('vizMode', 'lines');
+      updateVisualization({ preserveView: true, fitBounds: false });
+    });
+    document.getElementById('vizHeat').addEventListener('click', () => {
+      currentViz = 'heat';
+      document.getElementById('vizHeat').classList.add('active');
+      document.getElementById('vizLines').classList.remove('active');
+      saveSetting('vizMode', 'heat');
+      updateVisualization({ preserveView: true, fitBounds: false });
+    });
+
+    // Sliders auto update
+    document.getElementById('opacity').addEventListener('input', (e) => {
+      document.getElementById('opacityValue').textContent = e.target.value + '%';
+      saveSetting('opacity', e.target.value);
+      debounceUpdate();
+    });
+    document.getElementById('lineWidth').addEventListener('input', (e) => {
+      document.getElementById('widthValue').textContent = e.target.value;
+      saveSetting('lineWidth', e.target.value);
+      debounceUpdate();
+    });
+
+    // Time range persistence
+    document.getElementById('timeRange').addEventListener('change', (e) => {
+      saveSetting('timeRange', e.target.value);
+    });
+
+    // --- Restore settings on page load ---
+    (function restoreSettings() {
+      // Credentials
+      if (loadSetting('rememberCreds', false)) {
+        document.getElementById('clientId').value = loadSetting('clientId', '');
+        document.getElementById('clientSecret').value = loadSetting('clientSecret', '');
+        document.getElementById('refreshToken').value = loadSetting('refreshToken', '');
+        document.getElementById('rememberCreds').checked = true;
+      }
+      // Sliders
+      const savedOpacity = loadSetting('opacity', null);
+      if (savedOpacity !== null) {
+        document.getElementById('opacity').value = savedOpacity;
+        document.getElementById('opacityValue').textContent = savedOpacity + '%';
+      }
+      const savedWidth = loadSetting('lineWidth', null);
+      if (savedWidth !== null) {
+        document.getElementById('lineWidth').value = savedWidth;
+        document.getElementById('widthValue').textContent = savedWidth;
+      }
+      // Viz mode
+      const savedViz = loadSetting('vizMode', null);
+      if (savedViz) {
+        currentViz = savedViz;
+        document.getElementById('vizLines').classList.toggle('active', savedViz === 'lines');
+        document.getElementById('vizHeat').classList.toggle('active', savedViz === 'heat');
+      }
+      // Map style
+      const savedStyle = loadSetting('mapStyle', null);
+      if (savedStyle && tileLayers[savedStyle]) {
+        map.removeLayer(currentLayer);
+        currentLayer = tileLayers[savedStyle];
         currentLayer.addTo(map);
-
-        // Store all activities and current visualization
-        let allActivities = [];
-        let routeLayers = [];
-        let heatLayer = null;
-        let selectedSports = new Set();
-        let currentViz = 'lines';
-
-        // Sport type colors
-        const sportColors = {
-            'Run': '#fc4c02',
-            'Ride': '#00a9e0',
-            'Swim': '#00d4aa',
-            'Hike': '#8b4513',
-            'Walk': '#ff69b4',
-            'VirtualRun': '#ff6b6b',
-            'VirtualRide': '#4ecdc4',
-            'TrailRun': '#228b22',
-            'AlpineSki': '#6495ed',
-            'BackcountrySki': '#4169e1',
-            'Canoeing': '#20b2aa',
-            'Crossfit': '#dc143c',
-            'EBikeRide': '#00ced1',
-            'Elliptical': '#da70d6',
-            'Golf': '#98fb98',
-            'Handcycle': '#ff7f50',
-            'IceSkate': '#b0e0e6',
-            'InlineSkate': '#ff1493',
-            'Kayaking': '#48d1cc',
-            'Kitesurf': '#00fa9a',
-            'NordicSki': '#87ceeb',
-            'RockClimbing': '#d2691e',
-            'RollerSki': '#ffd700',
-            'Rowing': '#4682b4',
-            'Sail': '#1e90ff',
-            'Skateboard': '#ff4500',
-            'Snowboard': '#6a5acd',
-            'Snowshoe': '#708090',
-            'Soccer': '#32cd32',
-            'StairStepper': '#ff69b4',
-            'StandUpPaddling': '#00bfff',
-            'Surfing': '#00ffff',
-            'Tennis': '#adff2f',
-            'Velomobile': '#ff00ff',
-            'Wheelchair': '#9370db',
-            'WeightTraining': '#8b0000',
-            'Windsurf': '#7fffd4',
-            'Workout': '#ffa500',
-            'Yoga': '#9932cc',
-            'Default': '#808080'
-        };
-
-        // Decode polyline from Strava
-        function decodePolyline(encoded) {
-            if (!encoded) return [];
-            const points = [];
-            let index = 0, len = encoded.length;
-            let lat = 0, lng = 0;
-
-            while (index < len) {
-                let b, shift = 0, result = 0;
-                do {
-                    b = encoded.charCodeAt(index++) - 63;
-                    result |= (b & 0x1f) << shift;
-                    shift += 5;
-                } while (b >= 0x20);
-                let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
-                lat += dlat;
-
-                shift = 0;
-                result = 0;
-                do {
-                    b = encoded.charCodeAt(index++) - 63;
-                    result |= (b & 0x1f) << shift;
-                    shift += 5;
-                } while (b >= 0x20);
-                let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
-                lng += dlng;
-
-                points.push([lat / 1e5, lng / 1e5]);
-            }
-            return points;
-        }
-
-        // Show message
-        function showMessage(type, message) {
-            const errorEl = document.getElementById('error');
-            const successEl = document.getElementById('success');
-
-            errorEl.style.display = 'none';
-            successEl.style.display = 'none';
-
-            if (type === 'error') {
-                errorEl.textContent = message;
-                errorEl.style.display = 'block';
-            } else if (type === 'success') {
-                successEl.textContent = message;
-                successEl.style.display = 'block';
-            }
-        }
-
-        // Update progress
-        function updateProgress(current, total, text) {
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-
-            const percentage = total > 0 ? (current / total) * 100 : 0;
-            progressBar.style.width = percentage + '%';
-            progressText.textContent = text;
-        }
-
-        // Fetch activities
-        async function fetchActivities(accessToken) {
-            const activities = [];
-            let page = 1;
-            const perPage = 100;
-            const timeRange = document.getElementById('timeRange').value;
-
-            let afterDate;
-            if (timeRange === 'all') {
-                afterDate = 0;
-            } else {
-                const years = parseFloat(timeRange);
-                afterDate = Math.floor(Date.now() / 1000) - (years * 365 * 24 * 60 * 60);
-            }
-
-            try {
-                // Test token
-                updateProgress(0, 100, 'Testing access token...');
-                const testUrl = `https://www.strava.com/api/v3/athlete?access_token=${accessToken}`;
-                const testResponse = await fetch(testUrl);
-
-                if (!testResponse.ok) {
-                    throw new Error('Invalid or expired access token');
-                }
-
-                const athlete = await testResponse.json();
-                updateProgress(10, 100, `Loading activities for ${athlete.firstname}...`);
-
-                // Fetch all activities (not just runs)
-                let hasMore = true;
-
-                while (hasMore) {
-                    const url = `https://www.strava.com/api/v3/athlete/activities?page=${page}&per_page=${perPage}&after=${afterDate}&access_token=${accessToken}`;
-
-                    const response = await fetch(url);
-
-                    if (!response.ok) {
-                        if (response.status === 429) {
-                            throw new Error('Rate limit exceeded. Please wait 15 minutes and try again.');
-                        }
-                        throw new Error(`Failed to fetch activities (${response.status})`);
-                    }
-
-                    const pageActivities = await response.json();
-
-                    if (!pageActivities || pageActivities.length === 0) {
-                        hasMore = false;
-                        break;
-                    }
-
-                    activities.push(...pageActivities);
-
-                    const progressPercent = Math.min(10 + (page * 10), 90);
-                    updateProgress(progressPercent, 100,
-                        `Loaded ${activities.length} activities (page ${page})...`);
-
-                    if (pageActivities.length < perPage) {
-                        hasMore = false;
-                    } else {
-                        page++;
-                        await new Promise(resolve => setTimeout(resolve, 200));
-                    }
-
-                    if (page > 50) {
-                        hasMore = false;
-                    }
-                }
-
-                updateProgress(100, 100, `Loaded ${activities.length} activities!`);
-                return activities;
-
-            } catch (error) {
-                console.error('Fetch error:', error);
-                throw error;
-            }
-        }
-
-        // Create sport buttons
-        function createSportButtons(activities) {
-            const sportCounts = {};
-
-            activities.forEach(activity => {
-                if (activity.type) {
-                    sportCounts[activity.type] = (sportCounts[activity.type] || 0) + 1;
-                }
-            });
-
-            const container = document.getElementById('sportButtons');
-            container.innerHTML = '';
-
-            // Sort by count
-            const sortedSports = Object.entries(sportCounts)
-                .sort((a, b) => b[1] - a[1]);
-
-            sortedSports.forEach(([sport, count]) => {
-                const btn = document.createElement('button');
-                btn.className = 'sport-btn active';
-                btn.innerHTML = `${sport} <span class="count">(${count})</span>`;
-                btn.dataset.sport = sport;
-
-                // Get sport color
-                const color = sportColors[sport] || sportColors['Default'];
-                btn.style.borderColor = color;
-
-                selectedSports.add(sport);
-
-                btn.addEventListener('click', () => {
-                    btn.classList.toggle('active');
-                    if (selectedSports.has(sport)) {
-                        selectedSports.delete(sport);
-                    } else {
-                        selectedSports.add(sport);
-                    }
-                });
-
-                container.appendChild(btn);
-            });
-        }
-
-        // Draw routes as lines
-        function drawRoutes() {
-            // Clear existing routes
-            routeLayers.forEach(layer => map.removeLayer(layer));
-            routeLayers = [];
-
-            const opacity = document.getElementById('opacity').value / 100;
-            const weight = parseInt(document.getElementById('lineWidth').value);
-
-            // Count overlapping segments
-            const segmentCounts = {};
-
-            allActivities.forEach(activity => {
-                if (!selectedSports.has(activity.type)) return;
-                if (!activity.map?.summary_polyline) return;
-
-                const points = decodePolyline(activity.map.summary_polyline);
-                if (points.length < 2) return;
-
-                // Count segments
-                for (let i = 0; i < points.length - 1; i++) {
-                    const key = `${points[i][0].toFixed(4)},${points[i][1].toFixed(4)}-${points[i+1][0].toFixed(4)},${points[i+1][1].toFixed(4)}`;
-                    segmentCounts[key] = (segmentCounts[key] || 0) + 1;
-                }
-            });
-
-            // Find max count for normalization
-            const maxCount = Math.max(...Object.values(segmentCounts), 1);
-
-            // Draw routes with intensity based on frequency
-            allActivities.forEach(activity => {
-                if (!selectedSports.has(activity.type)) return;
-                if (!activity.map?.summary_polyline) return;
-
-                const points = decodePolyline(activity.map.summary_polyline);
-                if (points.length < 2) return;
-
-                const color = sportColors[activity.type] || sportColors['Default'];
-
-                // Create polyline
-                const polyline = L.polyline(points, {
-                    color: color,
-                    weight: weight,
-                    opacity: opacity,
-                    smoothFactor: 1
-                });
-
-                polyline.bindPopup(`
-                    <strong>${activity.name}</strong><br>
-                    Type: ${activity.type}<br>
-                    Date: ${new Date(activity.start_date).toLocaleDateString()}<br>
-                    Distance: ${(activity.distance / 1000).toFixed(2)} km
-                `);
-
-                routeLayers.push(polyline);
-                polyline.addTo(map);
-            });
-        }
-
-        // Draw heatmap
-        function drawHeatmap() {
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
-            }
-
-            const allPoints = [];
-
-            allActivities.forEach(activity => {
-                if (!selectedSports.has(activity.type)) return;
-                if (!activity.map?.summary_polyline) return;
-
-                const points = decodePolyline(activity.map.summary_polyline);
-                points.forEach(point => {
-                    allPoints.push([point[0], point[1], 0.5]);
-                });
-            });
-
-            if (allPoints.length === 0) return;
-
-            heatLayer = L.heatLayer(allPoints, {
-                radius: 25,
-                blur: 15,
-                maxZoom: 17,
-                max: 1.0,
-                gradient: {
-                    0.0: 'transparent',
-                    0.25: 'blue',
-                    0.4: 'cyan',
-                    0.6: 'lime',
-                    0.75: 'yellow',
-                    0.9: 'orange',
-                    1.0: 'red'
-                }
-            }).addTo(map);
-        }
-
-        // Update visualization
-        function updateVisualization() {
-            // Clear existing
-            routeLayers.forEach(layer => map.removeLayer(layer));
-            routeLayers = [];
-            if (heatLayer) {
-                map.removeLayer(heatLayer);
-                heatLayer = null;
-            }
-
-            // Draw based on current mode
-            if (currentViz === 'lines') {
-                drawRoutes();
-            } else {
-                drawHeatmap();
-            }
-
-            // Update stats
-            updateStats();
-
-            // Fit bounds
-            const bounds = [];
-            allActivities.forEach(activity => {
-                if (!selectedSports.has(activity.type)) return;
-                if (!activity.map?.summary_polyline) return;
-
-                const points = decodePolyline(activity.map.summary_polyline);
-                bounds.push(...points);
-            });
-
-            if (bounds.length > 0) {
-                map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50] });
-            }
-        }
-
-        // Update statistics
-        function updateStats() {
-            let totalDistance = 0;
-            let minDate = new Date();
-            let maxDate = new Date(0);
-            let routeCount = 0;
-            let activityCount = 0;
-
-            allActivities.forEach(activity => {
-                if (!selectedSports.has(activity.type)) return;
-
-                activityCount++;
-                if (activity.map?.summary_polyline) {
-                    routeCount++;
-                }
-
-                totalDistance += activity.distance || 0;
-
-                const actDate = new Date(activity.start_date);
-                if (actDate < minDate) minDate = actDate;
-                if (actDate > maxDate) maxDate = actDate;
-            });
-
-            document.getElementById('totalActivities').textContent = activityCount;
-            document.getElementById('totalDistance').textContent = `${(totalDistance / 1000).toFixed(1)} km`;
-            document.getElementById('routeCount').textContent = routeCount;
-
-            if (activityCount > 0) {
-                document.getElementById('dateRange').textContent =
-                    `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
-            } else {
-                document.getElementById('dateRange').textContent = '-';
-            }
-        }
-
-        // Main button handler
-        document.getElementById('fetchActivities').addEventListener('click', async () => {
-            const accessToken = document.getElementById('accessToken').value.trim();
-
-            if (!accessToken) {
-                showMessage('error', '⚠️ Please enter your Strava access token');
-                return;
-            }
-
-            const button = document.getElementById('fetchActivities');
-            const loading = document.getElementById('loading');
-
-            button.disabled = true;
-            loading.style.display = 'block';
-            showMessage('', '');
-
-            try {
-                allActivities = await fetchActivities(accessToken);
-
-                if (allActivities.length === 0) {
-                    showMessage('error', 'No activities found in the selected time range');
-                } else {
-                    updateProgress(95, 100, 'Processing activities...');
-
-                    createSportButtons(allActivities);
-                    document.getElementById('activityControls').style.display = 'block';
-                    document.getElementById('stats').style.display = 'block';
-
-                    updateVisualization();
-
-                    showMessage('success', `✅ Loaded ${allActivities.length} activities!`);
-                    button.textContent = '🔄 Reload Activities';
-                    updateProgress(100, 100, 'Complete!');
-                }
-
-            } catch (err) {
-                console.error('Error:', err);
-                showMessage('error', `❌ ${err.message}`);
-            } finally {
-                loading.style.display = 'none';
-                button.disabled = false;
-            }
+        document.querySelectorAll('.map-style-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.style === savedStyle);
         });
+      }
+      // Time range
+      const savedTime = loadSetting('timeRange', null);
+      if (savedTime !== null) {
+        document.getElementById('timeRange').value = savedTime;
+      }
+    })();
 
-        // Update map button
-        document.getElementById('updateMap').addEventListener('click', () => {
-            updateVisualization();
-            showMessage('success', '✅ Map updated!');
-        });
-
-        // Map style buttons
-        document.querySelectorAll('.map-style-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const style = btn.dataset.style;
-
-                // Update active button
-                document.querySelectorAll('.map-style-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-
-                // Change map layer
-                map.removeLayer(currentLayer);
-                currentLayer = tileLayers[style];
-                currentLayer.addTo(map);
-            });
-        });
-
-        // Visualization toggle
-        document.getElementById('vizLines').addEventListener('click', () => {
-            currentViz = 'lines';
-            document.getElementById('vizLines').classList.add('active');
-            document.getElementById('vizHeat').classList.remove('active');
-            updateVisualization();
-        });
-
-        document.getElementById('vizHeat').addEventListener('click', () => {
-            currentViz = 'heat';
-            document.getElementById('vizHeat').classList.add('active');
-            document.getElementById('vizLines').classList.remove('active');
-            updateVisualization();
-        });
-
-        // Opacity slider
-        document.getElementById('opacity').addEventListener('input', (e) => {
-            document.getElementById('opacityValue').textContent = e.target.value + '%';
-        });
-
-        // Line width slider
-        document.getElementById('lineWidth').addEventListener('input', (e) => {
-            document.getElementById('widthValue').textContent = e.target.value;
-        });
-
-        // Try to get user's location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    map.setView([position.coords.latitude, position.coords.longitude], 13);
-                },
-                error => {
-                    console.log('Location unavailable, using default');
-                }
-            );
-        }
-    </script>
+    // Try to set initial view to user location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => map.setView([pos.coords.latitude, pos.coords.longitude], 13),
+        () => {}
+      );
+    }
+  </script>
 </body>
 </html>
