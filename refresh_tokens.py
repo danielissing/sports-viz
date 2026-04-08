@@ -231,7 +231,7 @@ def main():
         print("\n" + "="*60)
         print("✅ NEXT STEPS:")
         print("="*60)
-        print("1. Open strava-heatmap.html in your browser")
+        print("1. Open strava-viz.html in your browser")
         print("2. Enter your Client ID, Client Secret, and the Refresh Token above")
         print("3. Check 'Remember credentials' so you won't need to enter them again")
         print("4. Click 'Load Activities' — the heatmap will auto-refresh your token")

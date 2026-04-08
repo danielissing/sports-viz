@@ -2,24 +2,69 @@
   var App = window.StravaApp;
   var chart = null;
   var currentMode = 'count';
+  var currentView = 'snapshot'; // 'snapshot' | 'overtime'
 
   function init() {
     var controlsEl = document.getElementById('controls-breakdown');
     if (!controlsEl || controlsEl.children.length > 0) return;
 
     controlsEl.innerHTML =
-      '<button class="chart-toggle-btn active" data-mode="count">By Count</button>' +
-      '<button class="chart-toggle-btn" data-mode="distance">By Distance</button>';
+      '<div class="chart-control-group">' +
+        '<button class="chart-toggle-btn active" data-mode="count">By Count</button>' +
+        '<button class="chart-toggle-btn" data-mode="distance">By Distance</button>' +
+      '</div>' +
+      '<div class="chart-control-group">' +
+        '<button class="chart-toggle-btn active" data-bview="snapshot">Snapshot</button>' +
+        '<button class="chart-toggle-btn" data-bview="overtime">Over Time</button>' +
+      '</div>';
 
-    controlsEl.querySelectorAll('.chart-toggle-btn').forEach(function(btn) {
+    controlsEl.querySelectorAll('[data-mode]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         currentMode = btn.dataset.mode;
-        controlsEl.querySelectorAll('.chart-toggle-btn').forEach(function(b) {
+        controlsEl.querySelectorAll('[data-mode]').forEach(function(b) {
           b.classList.toggle('active', b.dataset.mode === currentMode);
         });
         render();
       });
     });
+
+    controlsEl.querySelectorAll('[data-bview]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        currentView = btn.dataset.bview;
+        controlsEl.querySelectorAll('[data-bview]').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.bview === currentView);
+        });
+        render();
+      });
+    });
+  }
+
+  // Group sports contributing <5% of total into "Other"
+  function groupWithOther(sportData, mode) {
+    var total = 0;
+    Object.values(sportData).forEach(function(v) {
+      total += mode === 'count' ? v.count : v.distance;
+    });
+    if (total === 0) return sportData;
+
+    var threshold = total * 0.05;
+    var grouped = {};
+    var otherCount = 0, otherDist = 0;
+
+    Object.keys(sportData).forEach(function(sport) {
+      var val = mode === 'count' ? sportData[sport].count : sportData[sport].distance;
+      if (val < threshold) {
+        otherCount += sportData[sport].count;
+        otherDist += sportData[sport].distance;
+      } else {
+        grouped[sport] = { count: sportData[sport].count, distance: sportData[sport].distance };
+      }
+    });
+
+    if (otherCount > 0) {
+      grouped['Other'] = { count: otherCount, distance: otherDist };
+    }
+    return grouped;
   }
 
   function render() {
@@ -33,13 +78,27 @@
       return;
     }
 
-    // Aggregate by sport type
+    if (!container.querySelector('canvas')) {
+      container.innerHTML = '<canvas></canvas>';
+    }
+    var canvas = container.querySelector('canvas');
+
+    if (currentView === 'overtime') {
+      renderOverTime(canvas, filtered);
+    } else {
+      renderDoughnut(canvas, filtered);
+    }
+  }
+
+  function renderDoughnut(canvas, filtered) {
     var sportData = {};
     filtered.forEach(function(a) {
       if (!sportData[a.type]) sportData[a.type] = { count: 0, distance: 0 };
       sportData[a.type].count++;
       sportData[a.type].distance += a.distance;
     });
+
+    sportData = groupWithOther(sportData, currentMode);
 
     var sorted = Object.entries(sportData).sort(function(a, b) {
       return currentMode === 'count' ? b[1].count - a[1].count : b[1].distance - a[1].distance;
@@ -50,12 +109,6 @@
       return currentMode === 'count' ? e[1].count : +(e[1].distance / 1000).toFixed(1);
     });
     var colors = labels.map(function(l) { return App.getSportColor(l); });
-
-    // Ensure canvas exists
-    if (!container.querySelector('canvas')) {
-      container.innerHTML = '<canvas></canvas>';
-    }
-    var canvas = container.querySelector('canvas');
 
     if (chart) chart.destroy();
     chart = new Chart(canvas, {
@@ -84,6 +137,96 @@
                 var pct = ((ctx.raw / total) * 100).toFixed(1);
                 var suffix = currentMode === 'count' ? ' activities' : ' km';
                 return ctx.label + ': ' + ctx.raw + suffix + ' (' + pct + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+    App.charts.breakdown = chart;
+  }
+
+  function renderOverTime(canvas, filtered) {
+    // Aggregate totals to determine which sports to group
+    var totalBySport = {};
+    filtered.forEach(function(a) {
+      if (!totalBySport[a.type]) totalBySport[a.type] = { count: 0, distance: 0 };
+      totalBySport[a.type].count++;
+      totalBySport[a.type].distance += a.distance;
+    });
+    var grouped = groupWithOther(totalBySport, currentMode);
+    var keepSports = new Set(Object.keys(grouped));
+    keepSports.delete('Other');
+    var hasOther = grouped.hasOwnProperty('Other');
+
+    // Group by month and sport
+    var buckets = {};
+    filtered.forEach(function(a) {
+      var key = App.getMonthKey(a.start_date_local);
+      if (!buckets[key]) buckets[key] = {};
+      var sport = keepSports.has(a.type) ? a.type : 'Other';
+      if (!buckets[key][sport]) buckets[key][sport] = { count: 0, distance: 0 };
+      buckets[key][sport].count++;
+      buckets[key][sport].distance += a.distance;
+    });
+
+    var sortedKeys = Object.keys(buckets).sort();
+
+    // Build sport list in consistent order (largest first, Other last)
+    var sportOrder = Object.entries(grouped)
+      .filter(function(e) { return e[0] !== 'Other'; })
+      .sort(function(a, b) {
+        return currentMode === 'count' ? b[1].count - a[1].count : b[1].distance - a[1].distance;
+      })
+      .map(function(e) { return e[0]; });
+    if (hasOther) sportOrder.push('Other');
+
+    var datasets = sportOrder.map(function(sport) {
+      var color = App.getSportColor(sport);
+      return {
+        label: sport,
+        data: sortedKeys.map(function(key) {
+          var bucket = buckets[key][sport];
+          if (!bucket) return 0;
+          return currentMode === 'count' ? bucket.count : +(bucket.distance / 1000).toFixed(1);
+        }),
+        backgroundColor: color + 'B3',
+        borderColor: color,
+        borderWidth: 1,
+        fill: 'origin',
+        tension: 0.3,
+        pointRadius: 0
+      };
+    });
+
+    if (chart) chart.destroy();
+    chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels: sortedKeys, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { maxRotation: 45, maxTicksLimit: 20 }
+          },
+          y: {
+            stacked: true,
+            title: {
+              display: true,
+              text: currentMode === 'count' ? 'Activities' : 'Distance (km)'
+            }
+          }
+        },
+        plugins: {
+          legend: { position: 'top', labels: { usePointStyle: true, font: { size: 11 } } },
+          tooltip: {
+            mode: 'index',
+            callbacks: {
+              label: function(ctx) {
+                var suffix = currentMode === 'count' ? ' activities' : ' km';
+                return ctx.dataset.label + ': ' + ctx.raw + suffix;
               }
             }
           }

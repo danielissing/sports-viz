@@ -545,6 +545,46 @@ input[type="range"] {
   display: block;
 }
 
+/* === Strava Links === */
+.strava-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #fc4c02;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+  text-decoration: none;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.strava-link:hover {
+  opacity: 1;
+}
+
+/* === Best Efforts === */
+.best-efforts-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid #f0f0f0;
+}
+
+.best-efforts-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #333;
+  font-weight: 600;
+}
+
+/* === Records Sport Pills === */
+#controls-records {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 /* === Full-width cards === */
 #card-volume,
 #card-records,
