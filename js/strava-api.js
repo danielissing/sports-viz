@@ -46,18 +46,11 @@
     };
   };
 
-  App.fetchActivities = async function(accessToken, timeRange, onProgress) {
+  // afterEpoch: Unix timestamp (seconds). 0 = fetch entire history.
+  App.fetchActivities = async function(accessToken, afterEpoch, onProgress) {
     var activities = [];
     var page = 1;
     var perPage = 100;
-    var afterDate;
-
-    if (timeRange === 'all') {
-      afterDate = 0;
-    } else {
-      var years = parseFloat(timeRange);
-      afterDate = Math.floor(Date.now() / 1000) - (years * 365 * 24 * 60 * 60);
-    }
 
     var authHeaders = { 'Authorization': 'Bearer ' + accessToken };
 
@@ -72,19 +65,29 @@
     var hasMore = true;
     while (hasMore) {
       var url = 'https://www.strava.com/api/v3/athlete/activities?page=' + page +
-                '&per_page=' + perPage + '&after=' + afterDate;
+                '&per_page=' + perPage + '&after=' + afterEpoch;
       var response = await fetch(url, { headers: authHeaders });
       if (!response.ok) {
-        if (response.status === 429)
-          throw new Error('Rate limit exceeded. Please wait 15 minutes and try again.');
+        if (response.status === 429) {
+          // Persist whatever we have so far before throwing
+          if (onProgress) onProgress(-1, 100, 'Rate limited — ' + activities.length + ' activities saved so far.');
+          throw new Error('Rate limit exceeded. ' + activities.length + ' activities were saved. Wait 15 minutes and click Sync New.');
+        }
         throw new Error('Failed to fetch activities (' + response.status + ')');
       }
       var pageActivities = await response.json();
       if (!pageActivities || pageActivities.length === 0) { hasMore = false; break; }
 
-      pageActivities.forEach(function(raw) {
-        activities.push(App.normalizeActivity(raw));
+      var normalized = pageActivities.map(function(raw) {
+        return App.normalizeActivity(raw);
       });
+
+      // Persist each page immediately to IndexedDB
+      if (App.storage) {
+        await App.storage.putActivities(normalized);
+      }
+
+      activities = activities.concat(normalized);
 
       var progressPercent = Math.min(10 + (page * 10), 90);
       if (onProgress) onProgress(progressPercent, 100, 'Loaded ' + activities.length + ' activities (page ' + page + ')...');
