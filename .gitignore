@@ -29,6 +29,9 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Local notes
+improvements.md
+
 # Generated heatmap files (optional - remove if you want to commit these)
 # my_runs_heatmap.html
 # strava_heatmap.html
