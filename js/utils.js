@@ -2,6 +2,7 @@
 window.StravaApp = {
   activities: [],
   selectedSports: new Set(),
+  dateRange: { from: null, to: null },
   state: {
     currentTab: 'map',
     currentViz: 'lines',
@@ -36,6 +37,15 @@ window.StravaApp = {
 
   removeSetting: function(key) {
     try { localStorage.removeItem('strava_heatmap_' + key); } catch (e) {}
+  },
+
+  // --- Sport type helpers ---
+  isRunType: function(type) {
+    return type === 'Run' || type === 'TrailRun' || type === 'VirtualRun';
+  },
+
+  isRideType: function(type) {
+    return type === 'Ride' || type === 'VirtualRide' || type === 'EBikeRide';
   },
 
   // --- Sport colors ---
@@ -132,11 +142,50 @@ window.StravaApp = {
     return (metersPerSecond * 3.6).toFixed(1) + ' km/h';
   },
 
-  // --- Get filtered activities (respects selected sports) ---
+  // --- Get filtered activities (respects selected sports AND date range) ---
   getFilteredActivities: function() {
     var self = this;
     return this.activities.filter(function(a) {
-      return self.selectedSports.has(a.type);
+      if (!self.selectedSports.has(a.type)) return false;
+      if (self.dateRange.from) {
+        var actDate = a.start_date_local.slice(0, 10);
+        if (actDate < self.dateRange.from) return false;
+      }
+      if (self.dateRange.to) {
+        var actDate2 = a.start_date_local.slice(0, 10);
+        if (actDate2 > self.dateRange.to) return false;
+      }
+      return true;
     });
+  },
+
+  // --- Date range helpers ---
+  setDateRange: function(from, to) {
+    this.dateRange.from = from || null;
+    this.dateRange.to = to || null;
+    this.saveSetting('dateRange', this.dateRange);
+    this.emit('dateRangeChanged');
+  },
+
+  setDateRangePreset: function(preset) {
+    if (preset === 'all') {
+      this.setDateRange(null, null);
+      return;
+    }
+    var months = { '3m': 3, '6m': 6, '1y': 12, '2y': 24, '5y': 60 };
+    var m = months[preset];
+    if (!m) return;
+    var d = new Date();
+    d.setMonth(d.getMonth() - m);
+    var from = d.toISOString().slice(0, 10);
+    this.setDateRange(from, null);
+  },
+
+  restoreDateRange: function() {
+    var saved = this.loadSetting('dateRange', null);
+    if (saved) {
+      this.dateRange.from = saved.from || null;
+      this.dateRange.to = saved.to || null;
+    }
   }
 };

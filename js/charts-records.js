@@ -2,14 +2,6 @@
   var App = window.StravaApp;
   var selectedSport = null;
 
-  function isRunType(type) {
-    return type === 'Run' || type === 'TrailRun' || type === 'VirtualRun';
-  }
-
-  function isRideType(type) {
-    return type === 'Ride' || type === 'VirtualRide' || type === 'EBikeRide';
-  }
-
   function getFlaggedIds() {
     return App.loadSetting('flaggedActivityIds', []);
   }
@@ -24,11 +16,11 @@
   }
 
   function isSuspicious(activity) {
-    if (isRunType(activity.type) && activity.average_speed > 0) {
+    if (App.isRunType(activity.type) && activity.average_speed > 0) {
       var paceSecPerKm = 1000 / activity.average_speed;
       if (paceSecPerKm < 150) return true;
     }
-    if (isRideType(activity.type) && activity.average_speed > 0) {
+    if (App.isRideType(activity.type) && activity.average_speed > 0) {
       if (activity.average_speed * 3.6 > 60) return true;
     }
     return false;
@@ -48,21 +40,25 @@
       '</svg></a>';
   }
 
+  function flagButton(activityId, flagged) {
+    var isFlagged = flagged.indexOf(activityId) !== -1;
+    return '<button class="flag-btn' + (isFlagged ? ' flagged' : '') + '" data-id="' + activityId + '" title="Flag as GPS error">&#128681;</button>';
+  }
+
   function buildRecordRow(r, flagged) {
     var suspicious = isSuspicious(r.activity);
-    var isFlagged = flagged.indexOf(r.activity.id) !== -1;
     var html = '<tr' + (suspicious ? ' class="suspicious"' : '') + '>';
     html += '<td>' + r.metric + '</td>';
     html += '<td class="record-value">' + r.value + '</td>';
     html += '<td>' + escapeHtml(r.activity.name) + (suspicious ? ' &#9888;' : '') + '</td>';
     html += '<td>' + new Date(r.activity.start_date).toLocaleDateString() + '</td>';
-    html += '<td>' + stravaLink(r.activity.id) +
-      '<button class="flag-btn' + (isFlagged ? ' flagged' : '') + '" data-id="' + r.activity.id + '" title="Flag as GPS error">&#128681;</button></td>';
+    html += '<td>' + stravaLink(r.activity.id) + flagButton(r.activity.id, flagged) + '</td>';
     html += '</tr>';
     return html;
   }
 
   function buildRecords(acts, sport) {
+    if (acts.length === 0) return [];
     var records = [];
 
     // Longest distance
@@ -90,7 +86,7 @@
     }
 
     // Fastest pace (for run types)
-    if (isRunType(sport)) {
+    if (App.isRunType(sport)) {
       var withSpeed = acts.filter(function(a) { return a.average_speed > 0 && a.distance >= 1000; });
       if (withSpeed.length > 0) {
         var fastest = withSpeed.reduce(function(best, a) {
@@ -101,7 +97,7 @@
     }
 
     // Highest avg speed (for ride types)
-    if (isRideType(sport)) {
+    if (App.isRideType(sport)) {
       var withSpeed2 = acts.filter(function(a) { return a.average_speed > 0 && a.distance >= 1000; });
       if (withSpeed2.length > 0) {
         var fastest2 = withSpeed2.reduce(function(best, a) {
@@ -112,46 +108,6 @@
     }
 
     return records;
-  }
-
-  function buildBestEfforts(acts) {
-    var targets = [
-      { label: '5K', distance: 5000 },
-      { label: '10K', distance: 10000 },
-      { label: 'Half Marathon', distance: 21097.5 },
-      { label: 'Marathon', distance: 42195 }
-    ];
-
-    var efforts = [];
-    targets.forEach(function(t) {
-      var lower = t.distance * 0.9;
-      var upper = t.distance * 1.1;
-      var matching = acts.filter(function(a) {
-        return a.distance >= lower && a.distance <= upper && a.moving_time > 0;
-      });
-      if (matching.length === 0) return;
-
-      // Pick fastest (shortest moving_time)
-      var best = matching.reduce(function(b, a) {
-        return a.moving_time < b.moving_time ? a : b;
-      }, matching[0]);
-
-      var paceSecPerKm = best.moving_time / (best.distance / 1000);
-      var paceMin = Math.floor(paceSecPerKm / 60);
-      var paceSec = Math.floor(paceSecPerKm % 60);
-
-      efforts.push({
-        label: t.label,
-        time: App.formatDurationLong(best.moving_time),
-        pace: paceMin + ':' + String(paceSec).padStart(2, '0') + '/km',
-        actualDist: (best.distance / 1000).toFixed(2) + ' km',
-        name: best.name,
-        date: new Date(best.start_date).toLocaleDateString(),
-        id: best.id
-      });
-    });
-
-    return efforts;
   }
 
   function buildFlaggedSection(filtered, flagged) {
@@ -243,35 +199,12 @@
     var html = '<div class="records-table-container">';
 
     if (records.length > 0) {
-      var color = App.getSportColor(selectedSport);
       html += '<div class="records-sport-group">';
       html += '<table class="records-table"><thead><tr><th>Metric</th><th>Value</th><th>Activity</th><th>Date</th><th></th></tr></thead><tbody>';
       records.forEach(function(r) {
         html += buildRecordRow(r, flagged);
       });
       html += '</tbody></table></div>';
-    }
-
-    // Best Efforts for run types
-    if (isRunType(selectedSport)) {
-      var efforts = buildBestEfforts(acts);
-      if (efforts.length > 0) {
-        html += '<div class="best-efforts-section">';
-        html += '<h4>Best Efforts</h4>';
-        html += '<table class="records-table"><thead><tr><th>Distance</th><th>Time</th><th>Avg Pace</th><th>Actual</th><th>Activity</th><th>Date</th><th></th></tr></thead><tbody>';
-        efforts.forEach(function(e) {
-          html += '<tr>';
-          html += '<td class="record-value">' + e.label + '</td>';
-          html += '<td class="record-value">' + e.time + '</td>';
-          html += '<td>' + e.pace + '</td>';
-          html += '<td>' + e.actualDist + '</td>';
-          html += '<td>' + escapeHtml(e.name) + '</td>';
-          html += '<td>' + e.date + '</td>';
-          html += '<td>' + stravaLink(e.id) + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-      }
     }
 
     // Flagged section
