@@ -19,12 +19,12 @@
   // Expose map instance for other modules
   App.mapInstance = mapInstance;
 
-  // --- Drawing ---
+  // --- Drawing (uses getFilteredActivities for date+sport filtering) ---
   function drawRoutes() {
     var opacity = document.getElementById('opacity').value / 100;
     var weight = parseInt(document.getElementById('lineWidth').value);
-    App.activities.forEach(function(activity) {
-      if (!App.selectedSports.has(activity.type)) return;
+    var filtered = App.getFilteredActivities();
+    filtered.forEach(function(activity) {
       if (!activity.polyline) return;
       var points = App.decodePolyline(activity.polyline);
       if (points.length < 2) return;
@@ -43,8 +43,8 @@
 
   function drawHeatmap() {
     var allPoints = [];
-    App.activities.forEach(function(activity) {
-      if (!App.selectedSports.has(activity.type)) return;
+    var filtered = App.getFilteredActivities();
+    filtered.forEach(function(activity) {
       if (!activity.polyline) return;
       var points = App.decodePolyline(activity.polyline);
       points.forEach(function(p) { allPoints.push([p[0], p[1], 0.5]); });
@@ -61,11 +61,10 @@
   }
 
   function updateMapStats() {
+    var filtered = App.getFilteredActivities();
     var totalDistance = 0, minDate = new Date(), maxDate = new Date(0);
-    var routeCount = 0, activityCount = 0;
-    App.activities.forEach(function(activity) {
-      if (!App.selectedSports.has(activity.type)) return;
-      activityCount++;
+    var routeCount = 0, activityCount = filtered.length;
+    filtered.forEach(function(activity) {
       if (activity.polyline) routeCount++;
       totalDistance += activity.distance || 0;
       var d = new Date(activity.start_date);
@@ -98,8 +97,8 @@
     // Fit bounds on first draw
     if (opts.fitBounds) {
       var bounds = [];
-      App.activities.forEach(function(activity) {
-        if (!App.selectedSports.has(activity.type)) return;
+      var filtered = App.getFilteredActivities();
+      filtered.forEach(function(activity) {
         if (!activity.polyline) return;
         var points = App.decodePolyline(activity.polyline);
         bounds.push.apply(bounds, points);
@@ -136,83 +135,195 @@
   App.updateProgress = function(current, total, text) {
     var progressBar = document.getElementById('progressBar');
     var progressText = document.getElementById('progressText');
+    if (current < 0) {
+      progressText.textContent = text;
+      return;
+    }
     var percentage = total > 0 ? (current / total) * 100 : 0;
     progressBar.style.width = percentage + '%';
     progressText.textContent = text;
   };
 
-  // --- Load Activities button ---
-  document.getElementById('fetchActivities').addEventListener('click', async function() {
+  // --- Show activities on screen (common to cache load & fetch) ---
+  function showActivities(fitBounds) {
+    App.createSportButtons(App.activities);
+    document.getElementById('activityControls').style.display = 'block';
+    document.getElementById('mapStats').style.display = 'block';
+    document.getElementById('dateRangeControls').style.display = 'block';
+    App.updateVisualization({ preserveView: !fitBounds, fitBounds: fitBounds });
+    App.emit('activitiesLoaded');
+  }
+
+  // --- Update cache status display ---
+  function updateCacheStatus(count, lastSync) {
+    var el = document.getElementById('cacheStatus');
+    var textEl = document.getElementById('cacheStatusText');
+    if (count > 0) {
+      el.style.display = '';
+      var syncInfo = lastSync ? ' (last sync: ' + new Date(lastSync).toLocaleDateString() + ')' : '';
+      textEl.textContent = count + ' activities cached' + syncInfo;
+      document.getElementById('syncNew').style.display = '';
+      document.getElementById('fetchActivities').textContent = 'Reload All Activities';
+    } else {
+      el.style.display = 'none';
+      document.getElementById('syncNew').style.display = 'none';
+      document.getElementById('fetchActivities').textContent = 'Load All Activities';
+    }
+  }
+
+  // --- Collapse credentials when saved ---
+  function collapseCredsIfSaved() {
+    if (App.loadSetting('rememberCreds', false)) {
+      document.getElementById('credsBody').classList.add('collapsed');
+      document.getElementById('credsArrow').classList.add('collapsed');
+    }
+  }
+
+  // --- Credentials toggle ---
+  document.getElementById('credsToggle').addEventListener('click', function() {
+    document.getElementById('credsBody').classList.toggle('collapsed');
+    document.getElementById('credsArrow').classList.toggle('collapsed');
+  });
+
+  // --- Helper: get credentials and refresh token ---
+  async function getAccessToken() {
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
     var refreshTokenVal = document.getElementById('refreshToken').value.trim();
     if (!clientId || !clientSecret || !refreshTokenVal) {
-      App.showMessage('error', 'Please enter Client ID, Client Secret, and Refresh Token');
-      return;
+      throw new Error('Please enter Client ID, Client Secret, and Refresh Token');
     }
+    var tokens = await App.refreshAccessToken(clientId, clientSecret, refreshTokenVal);
+    // Update rotated refresh token
+    if (tokens.refreshToken !== refreshTokenVal) {
+      document.getElementById('refreshToken').value = tokens.refreshToken;
+      if (document.getElementById('rememberCreds').checked) {
+        App.saveSetting('refreshToken', tokens.refreshToken);
+      }
+    }
+    // Persist credentials
+    if (document.getElementById('rememberCreds').checked) {
+      App.saveSetting('clientId', clientId);
+      App.saveSetting('clientSecret', clientSecret);
+      App.saveSetting('refreshToken', document.getElementById('refreshToken').value.trim());
+      App.saveSetting('rememberCreds', true);
+    } else {
+      App.removeSetting('clientId');
+      App.removeSetting('clientSecret');
+      App.removeSetting('refreshToken');
+      App.removeSetting('rememberCreds');
+    }
+    return tokens.accessToken;
+  }
 
+  // --- Load All Activities button ---
+  document.getElementById('fetchActivities').addEventListener('click', async function() {
     var button = document.getElementById('fetchActivities');
     var loading = document.getElementById('loading');
-    var prevCenter = mapInstance.getCenter();
-    var prevZoom = mapInstance.getZoom();
 
     button.disabled = true;
+    document.getElementById('syncNew').disabled = true;
     loading.style.display = 'block';
     App.showMessage('', '');
 
     try {
-      var tokens = await App.refreshAccessToken(clientId, clientSecret, refreshTokenVal);
-      // Update rotated refresh token
-      if (tokens.refreshToken !== refreshTokenVal) {
-        document.getElementById('refreshToken').value = tokens.refreshToken;
-        if (document.getElementById('rememberCreds').checked) {
-          App.saveSetting('refreshToken', tokens.refreshToken);
-        }
-      }
-      // Persist credentials
-      if (document.getElementById('rememberCreds').checked) {
-        App.saveSetting('clientId', clientId);
-        App.saveSetting('clientSecret', clientSecret);
-        App.saveSetting('refreshToken', document.getElementById('refreshToken').value.trim());
-        App.saveSetting('rememberCreds', true);
-      } else {
-        App.removeSetting('clientId');
-        App.removeSetting('clientSecret');
-        App.removeSetting('refreshToken');
-        App.removeSetting('rememberCreds');
-      }
+      var accessToken = await getAccessToken();
 
-      var timeRange = document.getElementById('timeRange').value;
-      App.activities = await App.fetchActivities(tokens.accessToken, timeRange, App.updateProgress);
+      // Clear existing cache for full reload
+      await App.storage.clear();
 
-      if (App.activities.length === 0) {
-        App.showMessage('error', 'No activities found in the selected time range');
+      var fetched = await App.fetchActivities(accessToken, 0, App.updateProgress);
+
+      if (fetched.length === 0) {
+        App.showMessage('error', 'No activities found');
       } else {
-        App.updateProgress(95, 100, 'Processing activities...');
-        App.createSportButtons(App.activities);
-        document.getElementById('activityControls').style.display = 'block';
-        document.getElementById('mapStats').style.display = 'block';
+        // Reload all from IndexedDB (canonical source)
+        App.activities = await App.storage.getAllActivities();
+        App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+
+        await App.storage.setMeta('lastSyncDate', new Date().toISOString());
+        updateCacheStatus(App.activities.length, new Date().toISOString());
+        collapseCredsIfSaved();
 
         var shouldFit = !App.state.hasEverFit;
-        App.updateVisualization({ preserveView: !shouldFit, fitBounds: shouldFit });
+        showActivities(shouldFit);
         App.showMessage('success', 'Loaded ' + App.activities.length + ' activities!');
-        button.textContent = 'Reload Activities';
-
-        if (!shouldFit && prevCenter && typeof prevZoom === 'number') {
-          mapInstance.setView(prevCenter, prevZoom, { animate: false });
-        }
-        App.updateProgress(100, 100, 'Complete!');
-
-        // Notify dashboard
-        App.emit('activitiesLoaded');
       }
+    } catch (err) {
+      console.error('Error:', err);
+      App.showMessage('error', err.message);
+      // Even on error, show what was saved
+      var count = await App.storage.getCount();
+      if (count > 0) {
+        App.activities = await App.storage.getAllActivities();
+        App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+        await App.storage.setMeta('lastSyncDate', new Date().toISOString());
+        updateCacheStatus(count, new Date().toISOString());
+        showActivities(!App.state.hasEverFit);
+      }
+    } finally {
+      loading.style.display = 'none';
+      button.disabled = false;
+      document.getElementById('syncNew').disabled = false;
+    }
+  });
+
+  // --- Sync New Activities button ---
+  document.getElementById('syncNew').addEventListener('click', async function() {
+    var button = document.getElementById('syncNew');
+    var loading = document.getElementById('loading');
+
+    button.disabled = true;
+    document.getElementById('fetchActivities').disabled = true;
+    loading.style.display = 'block';
+    App.showMessage('', '');
+
+    try {
+      var accessToken = await getAccessToken();
+
+      var newestDate = await App.storage.getNewestActivityDate();
+      var afterEpoch = 0;
+      if (newestDate) {
+        afterEpoch = Math.floor(new Date(newestDate).getTime() / 1000);
+      }
+
+      var fetched = await App.fetchActivities(accessToken, afterEpoch, App.updateProgress);
+
+      // Reload all from IndexedDB
+      App.activities = await App.storage.getAllActivities();
+      App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+
+      await App.storage.setMeta('lastSyncDate', new Date().toISOString());
+      updateCacheStatus(App.activities.length, new Date().toISOString());
+
+      showActivities(!App.state.hasEverFit);
+      App.showMessage('success', 'Synced ' + fetched.length + ' new activities! Total: ' + App.activities.length);
     } catch (err) {
       console.error('Error:', err);
       App.showMessage('error', err.message);
     } finally {
       loading.style.display = 'none';
       button.disabled = false;
+      document.getElementById('fetchActivities').disabled = false;
     }
+  });
+
+  // --- Clear Cache ---
+  document.getElementById('clearCache').addEventListener('click', async function(e) {
+    e.preventDefault();
+    await App.storage.clear();
+    App.activities = [];
+    App.selectedSports.clear();
+    updateCacheStatus(0, null);
+    document.getElementById('activityControls').style.display = 'none';
+    document.getElementById('mapStats').style.display = 'none';
+    document.getElementById('dateRangeControls').style.display = 'none';
+    // Clear map
+    routeLayers.forEach(function(l) { mapInstance.removeLayer(l); });
+    routeLayers = [];
+    if (heatLayer) { mapInstance.removeLayer(heatLayer); heatLayer = null; }
+    App.showMessage('success', 'Cache cleared.');
+    App.emit('activitiesLoaded');
   });
 
   // --- Manual update button ---
@@ -264,9 +375,65 @@
     App.debounceMapUpdate();
   });
 
-  // --- Time range persistence ---
-  document.getElementById('timeRange').addEventListener('change', function(e) {
-    App.saveSetting('timeRange', e.target.value);
+  // --- Date range preset buttons (map sidebar) ---
+  function setupDateRangeControls(containerSelector, fromId, toId) {
+    var container = document.querySelector(containerSelector);
+    if (!container) return;
+
+    container.querySelectorAll('.date-preset-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        // Update active state in ALL preset button groups
+        document.querySelectorAll('.date-preset-btn').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.preset === btn.dataset.preset);
+        });
+        App.setDateRangePreset(btn.dataset.preset);
+        // Clear custom date inputs
+        document.getElementById('dateFrom').value = '';
+        document.getElementById('dateTo').value = '';
+        if (document.getElementById('dashDateFrom')) {
+          document.getElementById('dashDateFrom').value = '';
+          document.getElementById('dashDateTo').value = '';
+        }
+      });
+    });
+
+    var fromInput = document.getElementById(fromId);
+    var toInput = document.getElementById(toId);
+    if (fromInput) {
+      fromInput.addEventListener('change', function() {
+        // Deactivate all preset buttons
+        document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        App.setDateRange(fromInput.value || null, toInput ? toInput.value || null : null);
+        // Sync other date inputs
+        syncDateInputs(fromId, toId);
+      });
+    }
+    if (toInput) {
+      toInput.addEventListener('change', function() {
+        document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        App.setDateRange(fromInput ? fromInput.value || null : null, toInput.value || null);
+        syncDateInputs(fromId, toId);
+      });
+    }
+  }
+
+  function syncDateInputs(sourceFromId, sourceToId) {
+    var pairs = [
+      ['dateFrom', 'dateTo'],
+      ['dashDateFrom', 'dashDateTo']
+    ];
+    pairs.forEach(function(pair) {
+      if (pair[0] === sourceFromId) return; // Skip source
+      var fromEl = document.getElementById(pair[0]);
+      var toEl = document.getElementById(pair[1]);
+      if (fromEl) fromEl.value = App.dateRange.from || '';
+      if (toEl) toEl.value = App.dateRange.to || '';
+    });
+  }
+
+  // Re-render map when date range changes
+  App.on('dateRangeChanged', function() {
+    App.debounceMapUpdate();
   });
 
   // --- Restore settings on load ---
@@ -302,16 +469,52 @@
         b.classList.toggle('active', b.dataset.style === savedStyle);
       });
     }
-    var savedTime = App.loadSetting('timeRange', null);
-    if (savedTime !== null) {
-      document.getElementById('timeRange').value = savedTime;
+    // Restore date range
+    App.restoreDateRange();
+    if (App.dateRange.from || App.dateRange.to) {
+      // Deactivate "All" preset and set custom values
+      document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+      if (App.dateRange.from) {
+        document.getElementById('dateFrom').value = App.dateRange.from;
+        if (document.getElementById('dashDateFrom')) document.getElementById('dashDateFrom').value = App.dateRange.from;
+      }
+      if (App.dateRange.to) {
+        document.getElementById('dateTo').value = App.dateRange.to;
+        if (document.getElementById('dashDateTo')) document.getElementById('dashDateTo').value = App.dateRange.to;
+      }
+    }
+  })();
+
+  // Setup date range controls for both map sidebar and dashboard
+  setupDateRangeControls('#dateRangeControls', 'dateFrom', 'dateTo');
+  setupDateRangeControls('#dashboardDateFilter', 'dashDateFrom', 'dashDateTo');
+
+  // --- Cache-first startup ---
+  (async function startup() {
+    try {
+      await App.storage.open();
+      var count = await App.storage.getCount();
+      if (count > 0) {
+        var lastSync = await App.storage.getMeta('lastSyncDate');
+        App.activities = await App.storage.getAllActivities();
+        App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+        updateCacheStatus(count, lastSync);
+        collapseCredsIfSaved();
+        showActivities(true);
+      }
+    } catch (err) {
+      console.error('IndexedDB startup error:', err);
     }
   })();
 
   // --- Geolocation ---
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      function(pos) { mapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13); },
+      function(pos) {
+        if (!App.state.hasEverFit) {
+          mapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13);
+        }
+      },
       function() {}
     );
   }

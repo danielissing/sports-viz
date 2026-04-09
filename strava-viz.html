@@ -22,27 +22,32 @@
     <div class="controls" id="mapControls">
       <h3>Strava Sports Viz</h3>
 
-      <input type="text" id="clientId" placeholder="Client ID" />
-      <input type="password" id="clientSecret" placeholder="Client Secret" />
-      <input type="password" id="refreshToken" placeholder="Refresh Token" />
-      <label style="display:flex;align-items:center;gap:6px;margin:6px 0;">
-        <input type="checkbox" id="rememberCreds" style="width:auto;margin:0;" />
-        <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
-      </label>
+      <!-- Collapsible credentials section -->
+      <div id="credentialsSection">
+        <div class="creds-header" id="credsToggle">
+          <span>API Credentials</span>
+          <span class="creds-arrow" id="credsArrow">&#9660;</span>
+        </div>
+        <div class="creds-body" id="credsBody">
+          <input type="text" id="clientId" placeholder="Client ID" />
+          <input type="password" id="clientSecret" placeholder="Client Secret" />
+          <input type="password" id="refreshToken" placeholder="Refresh Token" />
+          <label style="display:flex;align-items:center;gap:6px;margin:6px 0;">
+            <input type="checkbox" id="rememberCreds" style="width:auto;margin:0;" />
+            <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
+          </label>
+        </div>
+      </div>
 
-      <label style="display:block;margin-top:15px;">
-        Time Range:
-        <select id="timeRange" style="margin-top:5px;">
-          <option value="0.25">Last 3 months</option>
-          <option value="0.5">Last 6 months</option>
-          <option value="1">Last year</option>
-          <option value="2" selected>Last 2 years</option>
-          <option value="5">Last 5 years</option>
-          <option value="all">All time</option>
-        </select>
-      </label>
+      <!-- Cache status -->
+      <div class="cache-status" id="cacheStatus" style="display:none;">
+        <span id="cacheStatusText"></span>
+        <a href="#" id="clearCache" class="clear-cache-link">Clear cache</a>
+      </div>
 
-      <button id="fetchActivities">Load Activities</button>
+      <!-- Action buttons -->
+      <button id="fetchActivities">Load All Activities</button>
+      <button id="syncNew" class="sync-btn" style="display:none;">Sync New Activities</button>
 
       <div class="loading" id="loading">
         <div class="spinner"></div>
@@ -53,6 +58,24 @@
 
       <div class="message error" id="error"></div>
       <div class="message success" id="success"></div>
+
+      <!-- Date range filter -->
+      <div id="dateRangeControls" style="display:none;">
+        <h4 style="margin:20px 0 10px 0;">Date Range:</h4>
+        <div class="date-range-presets">
+          <button class="date-preset-btn" data-preset="3m">3M</button>
+          <button class="date-preset-btn" data-preset="6m">6M</button>
+          <button class="date-preset-btn" data-preset="1y">1Y</button>
+          <button class="date-preset-btn" data-preset="2y">2Y</button>
+          <button class="date-preset-btn" data-preset="5y">5Y</button>
+          <button class="date-preset-btn active" data-preset="all">All</button>
+        </div>
+        <div class="date-range-inputs">
+          <input type="date" id="dateFrom" />
+          <span style="color:#666;font-size:12px;">to</span>
+          <input type="date" id="dateTo" />
+        </div>
+      </div>
 
       <div id="activityControls" style="display:none;">
         <h4 style="margin:20px 0 10px 0;">Select Activities:</h4>
@@ -107,6 +130,22 @@
   <!-- Stats View -->
   <div id="statsView" class="tab-view" style="display:none;">
     <div class="dashboard-container">
+      <!-- Date range filter duplicated in dashboard -->
+      <div class="dashboard-date-filter" id="dashboardDateFilter" style="display:none;">
+        <div class="date-range-presets">
+          <button class="date-preset-btn" data-preset="3m">3M</button>
+          <button class="date-preset-btn" data-preset="6m">6M</button>
+          <button class="date-preset-btn" data-preset="1y">1Y</button>
+          <button class="date-preset-btn" data-preset="2y">2Y</button>
+          <button class="date-preset-btn" data-preset="5y">5Y</button>
+          <button class="date-preset-btn active" data-preset="all">All</button>
+        </div>
+        <div class="date-range-inputs">
+          <input type="date" id="dashDateFrom" />
+          <span style="color:#666;font-size:12px;">to</span>
+          <input type="date" id="dashDateTo" />
+        </div>
+      </div>
       <div class="dashboard-sport-filter" id="dashboardSportFilter" style="display:none;"></div>
       <div class="dashboard-grid" id="dashboardGrid" style="display:none;"></div>
       <div class="dashboard-empty" id="dashboardEmpty">
@@ -123,6 +162,7 @@
 
   <!-- App Scripts (load order matters) -->
   <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
   <script src="js/strava-api.js"></script>
   <script src="js/map.js"></script>
   <script src="js/dashboard.js"></script>

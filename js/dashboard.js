@@ -84,11 +84,13 @@
       document.getElementById('dashboardEmpty').style.display = 'block';
       document.getElementById('dashboardGrid').style.display = 'none';
       document.getElementById('dashboardSportFilter').style.display = 'none';
+      document.getElementById('dashboardDateFilter').style.display = 'none';
       return;
     }
     document.getElementById('dashboardEmpty').style.display = 'none';
     document.getElementById('dashboardGrid').style.display = '';
     document.getElementById('dashboardSportFilter').style.display = '';
+    document.getElementById('dashboardDateFilter').style.display = '';
 
     App.ensureDashboardCards();
     App.emit('updateCharts');
@@ -128,6 +130,12 @@
   });
 
   App.on('activitiesLoaded', function() {
+    if (App.state.currentTab === 'stats') {
+      App.updateDashboard();
+    }
+  });
+
+  App.on('dateRangeChanged', function() {
     if (App.state.currentTab === 'stats') {
       App.updateDashboard();
     }

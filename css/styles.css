@@ -91,6 +91,142 @@ html, body {
   gap: 10px;
 }
 
+/* === Collapsible Credentials === */
+.creds-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.creds-header:hover {
+  color: #fc4c02;
+}
+
+.creds-arrow {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.creds-arrow.collapsed {
+  transform: rotate(-90deg);
+}
+
+.creds-body {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.creds-body.collapsed {
+  max-height: 0 !important;
+  overflow: hidden;
+}
+
+/* === Cache Status === */
+.cache-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f0faf0;
+  border: 1px solid #c8e6c8;
+  border-radius: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: #2e7d32;
+}
+
+.clear-cache-link {
+  color: #999;
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+  margin-left: 8px;
+}
+
+.clear-cache-link:hover {
+  color: #cc0000;
+  text-decoration: underline;
+}
+
+/* === Sync Button === */
+.sync-btn {
+  background: #4CAF50;
+  margin-top: 4px;
+}
+
+.sync-btn:hover:not(:disabled) {
+  background: #388E3C;
+}
+
+/* === Date Range Controls === */
+.date-range-presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.date-preset-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f0f0f0;
+  color: #555;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: auto;
+  margin: 0;
+  flex: 1;
+  min-width: 40px;
+  text-align: center;
+}
+
+.date-preset-btn:hover {
+  background: #e8e8e8;
+  transform: none;
+  box-shadow: none;
+}
+
+.date-preset-btn.active {
+  background: #fc4c02;
+  color: white;
+  border-color: #fc4c02;
+}
+
+.date-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-range-inputs input[type="date"] {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin: 0;
+}
+
+/* Dashboard date filter bar */
+.dashboard-date-filter {
+  padding: 15px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-bottom: 12px;
+}
+
 /* === Form Elements === */
 input, button, select {
   width: 100%;
@@ -545,6 +681,40 @@ input[type="range"] {
   display: block;
 }
 
+/* === Year Selector (Streaks) === */
+.year-selector {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.year-selector-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  background: #f0f0f0;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: auto;
+  margin: 0;
+  font-weight: 500;
+}
+
+.year-selector-btn:hover {
+  background: #e8e8e8;
+  transform: none;
+  box-shadow: none;
+}
+
+.year-selector-btn.active {
+  background: #fc4c02;
+  color: white;
+  border-color: #fc4c02;
+}
+
 /* === Strava Links === */
 .strava-link {
   display: inline-flex;
@@ -553,7 +723,7 @@ input[type="range"] {
   width: 24px;
   height: 24px;
   color: #fc4c02;
-  opacity: 0.4;
+  opacity: 0.7;
   transition: opacity 0.2s;
   text-decoration: none;
   vertical-align: middle;
@@ -583,6 +753,110 @@ input[type="range"] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+/* === YTD Layout (chart + summary table) === */
+.ytd-layout {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  min-height: 300px;
+}
+
+.ytd-chart {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.ytd-chart canvas {
+  max-height: 350px;
+}
+
+.ytd-summary {
+  flex: 0 0 140px;
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+.ytd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ytd-table th {
+  text-align: left;
+  padding: 4px 6px;
+  font-weight: 600;
+  color: #666;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 11px;
+}
+
+.ytd-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid #f0f0f0;
+  white-space: nowrap;
+}
+
+.ytd-color-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* === Typical Activity Stats Box === */
+.typical-layout {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+  min-height: 300px;
+}
+
+.typical-chart {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.typical-chart canvas {
+  max-height: 350px;
+}
+
+.typical-summary {
+  flex: 0 0 170px;
+  overflow-y: auto;
+}
+
+.typical-stat-group {
+  margin-bottom: 12px;
+}
+
+.typical-stat-group h5 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+.typical-stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.typical-stat-row .label {
+  color: #666;
+}
+
+.typical-stat-row .value {
+  font-weight: 600;
+  color: #fc4c02;
 }
 
 /* === Full-width cards === */
