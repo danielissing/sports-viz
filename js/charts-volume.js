@@ -1,20 +1,36 @@
 (function() {
   var App = window.StravaApp;
   var chart = null;
-  var granularity = 'monthly';
+  var granularity = null; // null = auto-detect
+  var userOverrodeGranularity = false;
   var metric = 'distance';
   var yoyMode = false;
   var ytdMode = false;
+
+  function getSmartGranularity() {
+    if (userOverrodeGranularity && granularity) return granularity;
+    // Auto-detect based on filtered data span
+    var filtered = App.getFilteredActivities();
+    if (filtered.length === 0) return 'monthly';
+    var dates = filtered.map(function(a) { return new Date(a.start_date_local).getTime(); });
+    var spanMs = Math.max.apply(null, dates) - Math.min.apply(null, dates);
+    var spanYears = spanMs / (365.25 * 24 * 60 * 60 * 1000);
+    if (spanYears > 5) return 'yearly';
+    if (spanYears > 2) return 'monthly';
+    return 'monthly';
+  }
 
   function init() {
     var controlsEl = document.getElementById('controls-volume');
     if (!controlsEl || controlsEl.children.length > 0) return;
 
+    var effectiveGran = getSmartGranularity();
+
     controlsEl.innerHTML =
       '<div class="chart-control-group">' +
-        '<button class="chart-toggle-btn" data-gran="weekly">Weekly</button>' +
-        '<button class="chart-toggle-btn active" data-gran="monthly">Monthly</button>' +
-        '<button class="chart-toggle-btn" data-gran="yearly">Yearly</button>' +
+        '<button class="chart-toggle-btn' + (effectiveGran === 'weekly' ? ' active' : '') + '" data-gran="weekly">Weekly</button>' +
+        '<button class="chart-toggle-btn' + (effectiveGran === 'monthly' ? ' active' : '') + '" data-gran="monthly">Monthly</button>' +
+        '<button class="chart-toggle-btn' + (effectiveGran === 'yearly' ? ' active' : '') + '" data-gran="yearly">Yearly</button>' +
       '</div>' +
       '<div class="chart-control-group">' +
         '<button class="chart-toggle-btn active" data-metric="distance">Distance</button>' +
@@ -29,6 +45,7 @@
     controlsEl.querySelectorAll('[data-gran]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         granularity = btn.dataset.gran;
+        userOverrodeGranularity = true;
         controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
           b.classList.toggle('active', b.dataset.gran === granularity);
         });
@@ -51,6 +68,15 @@
       if (yoyMode) {
         ytdMode = false;
         document.getElementById('ytdToggle').classList.remove('active');
+        // YoY with "Yearly" granularity is meaningless (1 point per year) — auto-switch to monthly
+        var g = getEffectiveGranularity();
+        if (g === 'yearly') {
+          granularity = 'monthly';
+          userOverrodeGranularity = true;
+          controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.gran === 'monthly');
+          });
+        }
       }
       this.classList.toggle('active', yoyMode);
       render();
@@ -67,9 +93,14 @@
     });
   }
 
+  function getEffectiveGranularity() {
+    return getSmartGranularity();
+  }
+
   function getKeyFn() {
-    if (granularity === 'weekly') return function(a) { return App.getWeekKey(a.start_date_local); };
-    if (granularity === 'yearly') return function(a) { return App.getYearKey(a.start_date_local); };
+    var g = getEffectiveGranularity();
+    if (g === 'weekly') return function(a) { return App.getWeekKey(a.start_date_local); };
+    if (g === 'yearly') return function(a) { return App.getYearKey(a.start_date_local); };
     return function(a) { return App.getMonthKey(a.start_date_local); };
   }
 
@@ -98,6 +129,15 @@
     return getKeyFn()(fakeActivity);
   }
 
+  function updateGranularityButtons() {
+    var g = getEffectiveGranularity();
+    var controlsEl = document.getElementById('controls-volume');
+    if (!controlsEl) return;
+    controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.gran === g);
+    });
+  }
+
   function render() {
     var container = document.getElementById('chart-volume');
     if (!container) return;
@@ -109,17 +149,23 @@
       return;
     }
 
-    if (!container.querySelector('canvas')) {
-      container.innerHTML = '<canvas></canvas>';
-    }
-    var canvas = container.querySelector('canvas');
+    // Update granularity buttons to reflect auto-detect
+    if (!userOverrodeGranularity) updateGranularityButtons();
 
     if (ytdMode) {
-      renderYTD(canvas, filtered);
-    } else if (yoyMode) {
-      renderYoY(canvas, filtered);
+      // YTD builds its own layout (chart + summary table)
+      renderYTD(filtered);
     } else {
-      renderStacked(canvas, filtered);
+      // Non-YTD: ensure plain canvas
+      if (!container.querySelector('canvas') || container.querySelector('.ytd-layout')) {
+        container.innerHTML = '<canvas></canvas>';
+      }
+      var canvas = container.querySelector('canvas');
+      if (yoyMode) {
+        renderYoY(canvas, filtered);
+      } else {
+        renderStacked(canvas, filtered);
+      }
     }
   }
 
@@ -191,17 +237,18 @@
   }
 
   function renderYoY(canvas, filtered) {
+    var g = getEffectiveGranularity();
     var years = {};
     filtered.forEach(function(a) {
       var d = new Date(a.start_date_local);
       var year = d.getFullYear();
       if (!years[year]) years[year] = {};
       var periodKey;
-      if (granularity === 'weekly') {
+      if (g === 'weekly') {
         var start = new Date(year, 0, 1);
         var diff = d - start;
         periodKey = 'W' + String(Math.ceil(diff / (7 * 24 * 60 * 60 * 1000))).padStart(2, '0');
-      } else if (granularity === 'yearly') {
+      } else if (g === 'yearly') {
         periodKey = String(year);
       } else {
         periodKey = String(d.getMonth() + 1).padStart(2, '0');
@@ -218,7 +265,7 @@
 
     var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     var labels = sortedPeriods.map(function(p) {
-      if (granularity === 'monthly') return monthNames[parseInt(p) - 1] || p;
+      if (g === 'monthly') return monthNames[parseInt(p) - 1] || p;
       return p;
     });
 
@@ -231,7 +278,7 @@
         borderColor: yearColors[i % yearColors.length],
         backgroundColor: 'transparent',
         borderWidth: 2,
-        tension: 0.3,
+        tension: 0,
         pointRadius: 3
       };
     });
@@ -261,7 +308,8 @@
     App.charts.volume = chart;
   }
 
-  function renderYTD(canvas, filtered) {
+  function renderYTD(filtered) {
+    var container = document.getElementById('chart-volume');
     var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     // Group activities by year and compute day-of-year + metric
@@ -270,20 +318,18 @@
       var d = new Date(a.start_date_local);
       var year = d.getFullYear();
       if (!years[year]) years[year] = [];
-      // Day of year: 1-based
       var startOfYear = new Date(year, 0, 1);
       var dayOfYear = Math.floor((d - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
       years[year].push({ day: dayOfYear, value: getMetricValue(a) });
     });
 
-    // For each year, sort by day and compute cumulative sum
     var yearColors = ['#fc4c02', '#00a9e0', '#00d4aa', '#ff69b4', '#8b4513', '#6495ed', '#dc143c'];
     var sortedYears = Object.keys(years).sort();
 
+    var yearTotals = {}; // Track final cumulative per year for the summary table
     var datasets = sortedYears.map(function(year, i) {
       var entries = years[year].sort(function(a, b) { return a.day - b.day; });
 
-      // Aggregate by day first (multiple activities on same day)
       var dayTotals = {};
       entries.forEach(function(e) {
         dayTotals[e.day] = (dayTotals[e.day] || 0) + e.value;
@@ -295,6 +341,8 @@
         cumulative += dayTotals[day];
         return { x: day, y: +cumulative.toFixed(2) };
       });
+
+      yearTotals[year] = { total: +cumulative.toFixed(1), color: yearColors[i % yearColors.length] };
 
       return {
         label: year,
@@ -308,11 +356,34 @@
       };
     });
 
-    // Month-start day numbers for x-axis ticks
+    // Build layout: chart + summary table side by side
+    container.innerHTML =
+      '<div class="ytd-layout">' +
+        '<div class="ytd-chart"><canvas></canvas></div>' +
+        '<div class="ytd-summary"></div>' +
+      '</div>';
+
+    // Build summary table
+    var summaryEl = container.querySelector('.ytd-summary');
+    var unit = getMetricUnit();
+    var tableHtml = '<table class="ytd-table">';
+    tableHtml += '<thead><tr><th>Year</th><th>Total</th></tr></thead><tbody>';
+    sortedYears.slice().reverse().forEach(function(year) {
+      var t = yearTotals[year];
+      tableHtml += '<tr>';
+      tableHtml += '<td><span class="ytd-color-dot" style="background:' + t.color + '"></span>' + year + '</td>';
+      tableHtml += '<td class="record-value">' + t.total.toLocaleString() + unit + '</td>';
+      tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+    summaryEl.innerHTML = tableHtml;
+
+    var ytdCanvas = container.querySelector('canvas');
+
     var monthStartDays = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
 
     if (chart) chart.destroy();
-    chart = new Chart(canvas, {
+    chart = new Chart(ytdCanvas, {
       type: 'line',
       data: { datasets: datasets },
       options: {
@@ -343,14 +414,13 @@
           }
         },
         plugins: {
-          legend: { position: 'top' },
+          legend: { display: false },
           tooltip: {
             callbacks: {
               title: function(items) {
                 if (!items.length) return '';
                 var dayNum = items[0].raw.x;
-                // Approximate month/day from day number
-                var d = new Date(2024, 0, dayNum); // use leap year for safety
+                var d = new Date(2024, 0, dayNum);
                 return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
               },
               label: function(ctx) {

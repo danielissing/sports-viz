@@ -1,10 +1,53 @@
 (function() {
   var App = window.StravaApp;
+  var selectedYear = 'last12'; // 'last12' or a year string like '2024'
 
   function init() {
     var controlsEl = document.getElementById('controls-streaks');
     if (!controlsEl || controlsEl.dataset.init) return;
     controlsEl.dataset.init = 'true';
+  }
+
+  function getYearsInData(filtered) {
+    var years = {};
+    filtered.forEach(function(a) {
+      var y = new Date(a.start_date_local).getFullYear();
+      years[y] = true;
+    });
+    return Object.keys(years).sort().reverse();
+  }
+
+  function renderYearSelector(container, filtered) {
+    var years = getYearsInData(filtered);
+    var selectorEl = container.querySelector('.year-selector');
+    if (!selectorEl) {
+      selectorEl = document.createElement('div');
+      selectorEl.className = 'year-selector';
+      container.insertBefore(selectorEl, container.firstChild);
+    }
+    selectorEl.innerHTML = '';
+
+    // "Last 12mo" button
+    var last12Btn = document.createElement('button');
+    last12Btn.className = 'year-selector-btn' + (selectedYear === 'last12' ? ' active' : '');
+    last12Btn.textContent = 'Last 12mo';
+    last12Btn.addEventListener('click', function() {
+      selectedYear = 'last12';
+      render();
+    });
+    selectorEl.appendChild(last12Btn);
+
+    // Year buttons
+    years.forEach(function(year) {
+      var btn = document.createElement('button');
+      btn.className = 'year-selector-btn' + (selectedYear === year ? ' active' : '');
+      btn.textContent = year;
+      btn.addEventListener('click', function() {
+        selectedYear = year;
+        render();
+      });
+      selectorEl.appendChild(btn);
+    });
   }
 
   function render() {
@@ -81,19 +124,33 @@
     html += '<div class="streak-stat-card"><div class="streak-stat-value">' + consistency + '%</div><div class="streak-stat-label">Weekly Consistency (3+ days)</div></div>';
     html += '</div>';
 
-    // Contribution grid
+    // Contribution grid (for selected year only)
     html += renderContributionGrid(filtered);
 
     html += '</div>';
     container.innerHTML = html;
+
+    // Add year selector above the grid
+    renderYearSelector(container, filtered);
   }
 
   function renderContributionGrid(filtered) {
     var today = new Date();
     today.setHours(0, 0, 0, 0);
-    var startDate = new Date(today);
-    startDate.setFullYear(startDate.getFullYear() - 1);
-    // Align to start of week (Sunday)
+
+    var startDate, endDate;
+    if (selectedYear === 'last12') {
+      endDate = new Date(today);
+      startDate = new Date(today);
+      startDate.setFullYear(startDate.getFullYear() - 1);
+    } else {
+      var year = parseInt(selectedYear);
+      startDate = new Date(year, 0, 1);
+      endDate = new Date(year, 11, 31);
+      if (endDate > today) endDate = new Date(today);
+    }
+
+    // Align start to beginning of week (Sunday)
     startDate.setDate(startDate.getDate() - startDate.getDay());
 
     // Count activities per day
@@ -115,10 +172,10 @@
     // Build weeks
     var weeks = [];
     var current = new Date(startDate);
-    while (current <= today) {
+    while (current <= endDate) {
       var week = [];
       for (var d = 0; d < 7; d++) {
-        if (current <= today) {
+        if (current <= endDate) {
           week.push(new Date(current));
         }
         current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
