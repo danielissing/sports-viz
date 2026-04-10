@@ -8,14 +8,19 @@
   var ytdMode = false;
   var localDateRange = { from: null, to: null };
   var presetInstalled = false;
+  var selectedSport = ''; // '' = all sports
 
   function getLocalFiltered() {
     return App.filterActivitiesByDateRange(App.activities, localDateRange);
   }
 
+  function applySportFilter(activities) {
+    if (!selectedSport) return activities;
+    return activities.filter(function(a) { return a.type === selectedSport; });
+  }
+
   function getSmartGranularity() {
     if (userOverrodeGranularity && granularity) return granularity;
-    // Auto-detect based on filtered data span
     var filtered = getLocalFiltered();
     if (filtered.length === 0) return 'monthly';
     var dates = filtered.map(function(a) { return new Date(a.start_date_local).getTime(); });
@@ -26,6 +31,49 @@
     return 'monthly';
   }
 
+  function buildSportDropdown(filtered) {
+    var controlsEl = document.getElementById('controls-volume');
+    if (!controlsEl) return;
+
+    var sportCounts = {};
+    filtered.forEach(function(a) {
+      sportCounts[a.type] = (sportCounts[a.type] || 0) + 1;
+    });
+    var sportList = Object.keys(sportCounts).sort(function(a, b) {
+      return sportCounts[b] - sportCounts[a];
+    });
+
+    if (selectedSport && sportList.indexOf(selectedSport) === -1) {
+      selectedSport = '';
+    }
+
+    var select = controlsEl.querySelector('.sport-select');
+    if (!select) {
+      select = document.createElement('select');
+      select.className = 'summary-select sport-select';
+      select.addEventListener('change', function() {
+        selectedSport = select.value;
+        render();
+      });
+      controlsEl.appendChild(select);
+    }
+
+    select.innerHTML = '';
+    var allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = 'All sports';
+    if (!selectedSport) allOpt.selected = true;
+    select.appendChild(allOpt);
+
+    sportList.forEach(function(sport) {
+      var opt = document.createElement('option');
+      opt.value = sport;
+      opt.textContent = sport + ' (' + sportCounts[sport] + ')';
+      if (sport === selectedSport) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
   function init() {
     var controlsEl = document.getElementById('controls-volume');
     if (!controlsEl || presetInstalled) return;
@@ -33,41 +81,81 @@
 
     var effectiveGran = getSmartGranularity();
 
+    // Date range dropdown
+    var storageKey = 'panel_volume_datePreset';
+    var savedPreset = App.loadSetting(storageKey, 'all');
+
+    var presets = [
+      { value: '3m', label: '3 months' },
+      { value: '6m', label: '6 months' },
+      { value: '1y', label: '1 year' },
+      { value: '2y', label: '2 years' },
+      { value: '5y', label: '5 years' },
+      { value: 'all', label: 'All time' }
+    ];
+
+    var dateSelectHtml = '<select class="summary-select" id="volumeDateRange">';
+    presets.forEach(function(p) {
+      dateSelectHtml += '<option value="' + p.value + '"' + (p.value === savedPreset ? ' selected' : '') + '>' + p.label + '</option>';
+    });
+    dateSelectHtml += '</select>';
+
+    // Metric dropdown
+    var metrics = [
+      { value: 'distance', label: 'Distance' },
+      { value: 'duration', label: 'Duration' },
+      { value: 'elevation', label: 'Elevation' },
+      { value: 'count', label: 'Count' }
+    ];
+
+    var metricSelectHtml = '<select class="summary-select" id="volumeMetric">';
+    metrics.forEach(function(m) {
+      metricSelectHtml += '<option value="' + m.value + '"' + (m.value === metric ? ' selected' : '') + '>' + m.label + '</option>';
+    });
+    metricSelectHtml += '</select>';
+
+    // Granularity dropdown
+    var grans = [
+      { value: 'weekly', label: 'Weekly' },
+      { value: 'monthly', label: 'Monthly' },
+      { value: 'yearly', label: 'Yearly' }
+    ];
+
+    var granSelectHtml = '<select class="summary-select" id="volumeGranularity">';
+    grans.forEach(function(g) {
+      granSelectHtml += '<option value="' + g.value + '"' + (g.value === effectiveGran ? ' selected' : '') + '>' + g.label + '</option>';
+    });
+    granSelectHtml += '</select>';
+
     controlsEl.innerHTML =
-      '<div class="chart-control-group">' +
-        '<button class="chart-toggle-btn' + (effectiveGran === 'weekly' ? ' active' : '') + '" data-gran="weekly">Weekly</button>' +
-        '<button class="chart-toggle-btn' + (effectiveGran === 'monthly' ? ' active' : '') + '" data-gran="monthly">Monthly</button>' +
-        '<button class="chart-toggle-btn' + (effectiveGran === 'yearly' ? ' active' : '') + '" data-gran="yearly">Yearly</button>' +
-      '</div>' +
-      '<div class="chart-control-group">' +
-        '<button class="chart-toggle-btn active" data-metric="distance">Distance</button>' +
-        '<button class="chart-toggle-btn" data-metric="duration">Duration</button>' +
-        '<button class="chart-toggle-btn" data-metric="elevation">Elevation</button>' +
-      '</div>' +
+      '<div class="chart-control-group">' + dateSelectHtml + '</div>' +
+      '<div class="chart-control-group">' + metricSelectHtml + '</div>' +
+      '<div class="chart-control-group" id="volumeGranGroup">' + granSelectHtml + '</div>' +
       '<div class="chart-control-group">' +
         '<button class="chart-toggle-btn" id="yoyToggle">Year-over-Year</button>' +
         '<button class="chart-toggle-btn" id="ytdToggle">Cumulative YTD</button>' +
       '</div>';
 
-    controlsEl.querySelectorAll('[data-gran]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        granularity = btn.dataset.gran;
-        userOverrodeGranularity = true;
-        controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
-          b.classList.toggle('active', b.dataset.gran === granularity);
-        });
-        render();
-      });
+    // Date range handler
+    document.getElementById('volumeDateRange').addEventListener('change', function() {
+      var preset = this.value;
+      App.saveSetting(storageKey, preset);
+      localDateRange = App.computeDateRangeFromPreset(preset);
+      render();
+    });
+    localDateRange = App.computeDateRangeFromPreset(savedPreset);
+
+    // Metric handler
+    document.getElementById('volumeMetric').addEventListener('change', function() {
+      metric = this.value;
+      render();
     });
 
-    controlsEl.querySelectorAll('[data-metric]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        metric = btn.dataset.metric;
-        controlsEl.querySelectorAll('[data-metric]').forEach(function(b) {
-          b.classList.toggle('active', b.dataset.metric === metric);
-        });
-        render();
-      });
+    // Granularity handler
+    document.getElementById('volumeGranularity').addEventListener('change', function() {
+      granularity = this.value;
+      userOverrodeGranularity = true;
+      render();
     });
 
     document.getElementById('yoyToggle').addEventListener('click', function() {
@@ -75,17 +163,15 @@
       if (yoyMode) {
         ytdMode = false;
         document.getElementById('ytdToggle').classList.remove('active');
-        // YoY with "Yearly" granularity is meaningless (1 point per year) — auto-switch to monthly
         var g = getEffectiveGranularity();
         if (g === 'yearly') {
           granularity = 'monthly';
           userOverrodeGranularity = true;
-          controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
-            b.classList.toggle('active', b.dataset.gran === 'monthly');
-          });
+          document.getElementById('volumeGranularity').value = 'monthly';
         }
       }
       this.classList.toggle('active', yoyMode);
+      updateGranularityVisibility();
       render();
     });
 
@@ -96,17 +182,25 @@
         document.getElementById('yoyToggle').classList.remove('active');
       }
       this.classList.toggle('active', ytdMode);
-      render();
-    });
-
-    localDateRange = App.createDatePresetControls(controlsEl, 'volume', function(range) {
-      localDateRange = range;
+      updateGranularityVisibility();
       render();
     });
   }
 
+  function updateGranularityVisibility() {
+    var granGroup = document.getElementById('volumeGranGroup');
+    if (granGroup) {
+      granGroup.style.display = ytdMode ? 'none' : '';
+    }
+  }
+
   function getEffectiveGranularity() {
     return getSmartGranularity();
+  }
+
+  function updateGranularityDropdown() {
+    var sel = document.getElementById('volumeGranularity');
+    if (sel) sel.value = getEffectiveGranularity();
   }
 
   function getKeyFn() {
@@ -119,56 +213,62 @@
   function getMetricValue(activity) {
     if (metric === 'distance') return activity.distance / 1000;
     if (metric === 'duration') return activity.moving_time / 3600;
+    if (metric === 'count') return 1;
     return activity.total_elevation_gain;
   }
 
   function getMetricLabel() {
     if (metric === 'distance') return 'Distance (km)';
     if (metric === 'duration') return 'Duration (hours)';
+    if (metric === 'count') return 'Activities';
     return 'Elevation (m)';
   }
 
   function getMetricUnit() {
     if (metric === 'distance') return ' km';
     if (metric === 'duration') return ' h';
+    if (metric === 'count') return '';
     return ' m';
   }
 
-  // Get the current period key for partial-period detection
   function getCurrentPeriodKey() {
     var now = new Date();
     var fakeActivity = { start_date_local: now.toISOString() };
     return getKeyFn()(fakeActivity);
   }
 
-  function updateGranularityButtons() {
-    var g = getEffectiveGranularity();
-    var controlsEl = document.getElementById('controls-volume');
-    if (!controlsEl) return;
-    controlsEl.querySelectorAll('[data-gran]').forEach(function(b) {
-      b.classList.toggle('active', b.dataset.gran === g);
-    });
+  function getTodayDayOfYear() {
+    var now = new Date();
+    var startOfYear = new Date(now.getFullYear(), 0, 1);
+    return Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000)) + 1;
   }
 
   function render() {
     var container = document.getElementById('chart-volume');
     if (!container) return;
 
-    var filtered = getLocalFiltered();
-    if (filtered.length === 0) {
+    var dateFiltered = getLocalFiltered();
+    if (dateFiltered.length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
       if (chart) { chart.destroy(); chart = null; }
       return;
     }
 
-    // Update granularity buttons to reflect auto-detect
-    if (!userOverrodeGranularity) updateGranularityButtons();
+    buildSportDropdown(dateFiltered);
+
+    var filtered = applySportFilter(dateFiltered);
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="chart-empty">No activities for selected sport</div>';
+      if (chart) { chart.destroy(); chart = null; }
+      return;
+    }
+
+    if (!userOverrodeGranularity) updateGranularityDropdown();
+    updateGranularityVisibility();
 
     if (ytdMode) {
-      // YTD builds its own layout (chart + summary table)
       renderYTD(filtered);
     } else {
-      // Non-YTD: ensure plain canvas
       if (!container.querySelector('canvas') || container.querySelector('.ytd-layout')) {
         container.innerHTML = '<canvas></canvas>';
       }
@@ -185,7 +285,6 @@
     var keyFn = getKeyFn();
     var currentKey = getCurrentPeriodKey();
 
-    // Group by period and sport
     var buckets = {};
     var sportTypes = new Set();
     filtered.forEach(function(a) {
@@ -204,7 +303,6 @@
       var baseColor = App.getSportColor(sport);
       var dataValues = sortedKeys.map(function(key) { return +(buckets[key][sport] || 0).toFixed(2); });
 
-      // Per-bar background colors — last bar gets 40% opacity if it's the current period
       var bgColors;
       if (isLastCurrent) {
         bgColors = dataValues.map(function(_, idx) {
@@ -320,11 +418,41 @@
     App.charts.volume = chart;
   }
 
+  var todayLinePlugin = {
+    id: 'todayLine',
+    afterDraw: function(chartInstance) {
+      var xScale = chartInstance.scales.x;
+      if (!xScale) return;
+      var todayDay = getTodayDayOfYear();
+      var xPixel = xScale.getPixelForValue(todayDay);
+      if (xPixel < xScale.left || xPixel > xScale.right) return;
+
+      var ctx = chartInstance.ctx;
+      var yScale = chartInstance.scales.y;
+      ctx.save();
+      ctx.beginPath();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.moveTo(xPixel, yScale.top);
+      ctx.lineTo(xPixel, yScale.bottom);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Today', xPixel, yScale.top - 4);
+      ctx.restore();
+    }
+  };
+
   function renderYTD(filtered) {
     var container = document.getElementById('chart-volume');
     var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var currentYear = new Date().getFullYear();
+    var todayDay = getTodayDayOfYear();
 
-    // Group activities by year and compute day-of-year + metric
     var years = {};
     filtered.forEach(function(a) {
       var d = new Date(a.start_date_local);
@@ -338,7 +466,7 @@
     var yearColors = ['#fc4c02', '#00a9e0', '#00d4aa', '#ff69b4', '#8b4513', '#6495ed', '#dc143c'];
     var sortedYears = Object.keys(years).sort();
 
-    var yearTotals = {}; // Track final cumulative per year for the summary table
+    var yearTotals = {};
     var datasets = sortedYears.map(function(year, i) {
       var entries = years[year].sort(function(a, b) { return a.day - b.day; });
 
@@ -349,42 +477,68 @@
 
       var days = Object.keys(dayTotals).map(Number).sort(function(a, b) { return a - b; });
       var cumulative = 0;
+      var ytdCumulative = 0;
       var data = days.map(function(day) {
         cumulative += dayTotals[day];
+        if (day <= todayDay) ytdCumulative = cumulative;
         return { x: day, y: +cumulative.toFixed(2) };
       });
 
-      yearTotals[year] = { total: +cumulative.toFixed(1), color: yearColors[i % yearColors.length] };
+      var isCurrent = parseInt(year) === currentYear;
+      var lastDay = data.length > 0 ? data[data.length - 1].x : 0;
+      var endDay = isCurrent ? todayDay : 365;
+      if (lastDay < endDay) {
+        data.push({ x: endDay, y: +cumulative.toFixed(2) });
+      }
+
+      yearTotals[year] = {
+        total: Math.round(cumulative),
+        ytd: Math.round(ytdCumulative),
+        color: yearColors[i % yearColors.length]
+      };
+
+      var yearIndex = sortedYears.length - 1 - sortedYears.indexOf(year);
+      var opacity = isCurrent ? 1.0 : (yearIndex <= 1 ? 0.7 : (yearIndex <= 3 ? 0.5 : 0.35));
+      var color = yearColors[i % yearColors.length];
+
+      var borderColor;
+      if (opacity < 1) {
+        var alphaHex = Math.round(opacity * 255).toString(16).padStart(2, '0');
+        borderColor = color + alphaHex;
+      } else {
+        borderColor = color;
+      }
 
       return {
         label: year,
         data: data,
-        borderColor: yearColors[i % yearColors.length],
+        borderColor: borderColor,
         backgroundColor: 'transparent',
-        borderWidth: 2,
+        borderWidth: isCurrent ? 3 : 2,
         tension: 0.3,
         pointRadius: 0,
         pointHitRadius: 8
       };
     });
 
-    // Build layout: chart + summary table side by side
     container.innerHTML =
       '<div class="ytd-layout">' +
         '<div class="ytd-chart"><canvas></canvas></div>' +
         '<div class="ytd-summary"></div>' +
       '</div>';
 
-    // Build summary table
     var summaryEl = container.querySelector('.ytd-summary');
     var unit = getMetricUnit();
     var tableHtml = '<table class="ytd-table">';
-    tableHtml += '<thead><tr><th>Year</th><th>Total</th></tr></thead><tbody>';
+    tableHtml += '<thead><tr><th>Year</th><th>YTD</th><th>Total</th></tr></thead><tbody>';
     sortedYears.slice().reverse().forEach(function(year) {
       var t = yearTotals[year];
-      tableHtml += '<tr>';
+      var isCurrent = parseInt(year) === currentYear;
+      var rowClass = isCurrent ? ' class="ytd-current-year"' : '';
+      tableHtml += '<tr' + rowClass + '>';
       tableHtml += '<td><span class="ytd-color-dot" style="background:' + t.color + '"></span>' + year + '</td>';
-      tableHtml += '<td class="record-value">' + t.total.toLocaleString() + unit + '</td>';
+      tableHtml += '<td class="record-value">' + t.ytd.toLocaleString() + unit + '</td>';
+      tableHtml += '<td class="record-value">' + (isCurrent ? '\u2014' : t.total.toLocaleString() + unit) + '</td>';
       tableHtml += '</tr>';
     });
     tableHtml += '</tbody></table>';
@@ -441,7 +595,8 @@
             }
           }
         }
-      }
+      },
+      plugins: [todayLinePlugin]
     });
     App.charts.volume = chart;
   }
