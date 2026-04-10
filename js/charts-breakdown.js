@@ -2,21 +2,23 @@
   var App = window.StravaApp;
   var chart = null;
   var currentMode = 'count';
-  var currentView = 'snapshot'; // 'snapshot' | 'overtime'
+  var localDateRange = { from: null, to: null };
+  var presetInstalled = false;
+
+  function getLocalFiltered() {
+    return App.filterActivitiesByDateRange(App.activities, localDateRange);
+  }
 
   function init() {
     var controlsEl = document.getElementById('controls-breakdown');
-    if (!controlsEl || controlsEl.children.length > 0) return;
+    if (!controlsEl || presetInstalled) return;
+    presetInstalled = true;
 
     controlsEl.innerHTML =
       '<div class="chart-control-group">' +
         '<button class="chart-toggle-btn active" data-mode="count">By Count</button>' +
         '<button class="chart-toggle-btn" data-mode="distance">By Distance</button>' +
         '<button class="chart-toggle-btn" data-mode="duration">By Duration</button>' +
-      '</div>' +
-      '<div class="chart-control-group">' +
-        '<button class="chart-toggle-btn active" data-bview="snapshot">Snapshot</button>' +
-        '<button class="chart-toggle-btn" data-bview="overtime">Over Time</button>' +
       '</div>';
 
     controlsEl.querySelectorAll('[data-mode]').forEach(function(btn) {
@@ -29,14 +31,9 @@
       });
     });
 
-    controlsEl.querySelectorAll('[data-bview]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        currentView = btn.dataset.bview;
-        controlsEl.querySelectorAll('[data-bview]').forEach(function(b) {
-          b.classList.toggle('active', b.dataset.bview === currentView);
-        });
-        render();
-      });
+    localDateRange = App.createDatePresetControls(controlsEl, 'breakdown', function(range) {
+      localDateRange = range;
+      render();
     });
   }
 
@@ -101,7 +98,7 @@
     var container = document.getElementById('chart-breakdown');
     if (!container) return;
 
-    var filtered = App.getFilteredActivities();
+    var filtered = getLocalFiltered();
     if (filtered.length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
       if (chart) { chart.destroy(); chart = null; }
@@ -113,65 +110,7 @@
     }
     var canvas = container.querySelector('canvas');
 
-    if (currentView === 'overtime') {
-      renderOverTime(canvas, filtered);
-    } else {
-      renderDoughnut(canvas, filtered);
-    }
-  }
-
-  function renderDoughnut(canvas, filtered) {
-    var sportData = {};
-    filtered.forEach(function(a) {
-      if (!sportData[a.type]) sportData[a.type] = { count: 0, distance: 0, duration: 0 };
-      sportData[a.type].count++;
-      sportData[a.type].distance += a.distance;
-      sportData[a.type].duration += a.moving_time;
-    });
-
-    sportData = groupWithOther(sportData);
-
-    var sorted = Object.entries(sportData).sort(function(a, b) {
-      return getModeValue(b[1]) - getModeValue(a[1]);
-    });
-
-    var labels = sorted.map(function(e) { return e[0]; });
-    var values = sorted.map(function(e) { return formatDisplayValue(e[0], e[1]); });
-    var colors = labels.map(function(l) { return App.getSportColor(l); });
-
-    if (chart) chart.destroy();
-    chart = new Chart(canvas, {
-      type: 'doughnut',
-      data: {
-        labels: labels,
-        datasets: [{
-          data: values,
-          backgroundColor: colors,
-          borderWidth: 2,
-          borderColor: '#fff'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'right',
-            labels: { padding: 15, usePointStyle: true, font: { size: 12 } }
-          },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) {
-                var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-                var pct = ((ctx.raw / total) * 100).toFixed(1);
-                return ctx.label + ': ' + ctx.raw + getModeSuffix() + ' (' + pct + '%)';
-              }
-            }
-          }
-        }
-      }
-    });
-    App.charts.breakdown = chart;
+    renderOverTime(canvas, filtered);
   }
 
   function renderOverTime(canvas, filtered) {

@@ -382,18 +382,12 @@
 
     container.querySelectorAll('.date-preset-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        // Update active state in ALL preset button groups
-        document.querySelectorAll('.date-preset-btn').forEach(function(b) {
+        container.querySelectorAll('.date-preset-btn').forEach(function(b) {
           b.classList.toggle('active', b.dataset.preset === btn.dataset.preset);
         });
         App.setDateRangePreset(btn.dataset.preset);
-        // Clear custom date inputs
         document.getElementById('dateFrom').value = '';
         document.getElementById('dateTo').value = '';
-        if (document.getElementById('dashDateFrom')) {
-          document.getElementById('dashDateFrom').value = '';
-          document.getElementById('dashDateTo').value = '';
-        }
       });
     });
 
@@ -401,34 +395,16 @@
     var toInput = document.getElementById(toId);
     if (fromInput) {
       fromInput.addEventListener('change', function() {
-        // Deactivate all preset buttons
-        document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        container.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
         App.setDateRange(fromInput.value || null, toInput ? toInput.value || null : null);
-        // Sync other date inputs
-        syncDateInputs(fromId, toId);
       });
     }
     if (toInput) {
       toInput.addEventListener('change', function() {
-        document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+        container.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
         App.setDateRange(fromInput ? fromInput.value || null : null, toInput.value || null);
-        syncDateInputs(fromId, toId);
       });
     }
-  }
-
-  function syncDateInputs(sourceFromId, sourceToId) {
-    var pairs = [
-      ['dateFrom', 'dateTo'],
-      ['dashDateFrom', 'dashDateTo']
-    ];
-    pairs.forEach(function(pair) {
-      if (pair[0] === sourceFromId) return; // Skip source
-      var fromEl = document.getElementById(pair[0]);
-      var toEl = document.getElementById(pair[1]);
-      if (fromEl) fromEl.value = App.dateRange.from || '';
-      if (toEl) toEl.value = App.dateRange.to || '';
-    });
   }
 
   // Re-render map when date range changes
@@ -473,21 +449,21 @@
     App.restoreDateRange();
     if (App.dateRange.from || App.dateRange.to) {
       // Deactivate "All" preset and set custom values
-      document.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+      var mapPresets = document.querySelector('#dateRangeControls');
+      if (mapPresets) {
+        mapPresets.querySelectorAll('.date-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+      }
       if (App.dateRange.from) {
         document.getElementById('dateFrom').value = App.dateRange.from;
-        if (document.getElementById('dashDateFrom')) document.getElementById('dashDateFrom').value = App.dateRange.from;
       }
       if (App.dateRange.to) {
         document.getElementById('dateTo').value = App.dateRange.to;
-        if (document.getElementById('dashDateTo')) document.getElementById('dashDateTo').value = App.dateRange.to;
       }
     }
   })();
 
-  // Setup date range controls for both map sidebar and dashboard
+  // Setup date range controls for map sidebar only
   setupDateRangeControls('#dateRangeControls', 'dateFrom', 'dateTo');
-  setupDateRangeControls('#dashboardDateFilter', 'dashDateFrom', 'dashDateTo');
 
   // --- Cache-first startup ---
   (async function startup() {
@@ -506,18 +482,6 @@
       console.error('IndexedDB startup error:', err);
     }
   })();
-
-  // --- Geolocation ---
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      function(pos) {
-        if (!App.state.hasEverFit) {
-          mapInstance.setView([pos.coords.latitude, pos.coords.longitude], 13);
-        }
-      },
-      function() {}
-    );
-  }
 
   // --- Handle tab switch to map ---
   App.on('tabSwitch', function(tab) {

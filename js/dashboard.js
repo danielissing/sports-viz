@@ -21,7 +21,7 @@
     }
   };
 
-  // --- Create sport buttons in both map controls and dashboard ---
+  // --- Create sport buttons in map controls ---
   App.createSportButtons = function(activities) {
     var sportCounts = {};
     activities.forEach(function(a) {
@@ -38,42 +38,36 @@
       if (isActive) App.selectedSports.add(sport);
     });
 
-    // Build buttons in both containers
-    var containers = [
-      document.getElementById('sportButtons'),
-      document.getElementById('dashboardSportFilter')
-    ];
+    // Build buttons in map controls only
+    var container = document.getElementById('sportButtons');
+    if (!container) return;
 
-    containers.forEach(function(container) {
-      if (!container) return;
-      container.innerHTML = '';
-      sortedSports.forEach(function(entry) {
-        var sport = entry[0];
-        var count = entry[1];
-        var btn = document.createElement('button');
-        var isActive = App.selectedSports.has(sport);
-        btn.className = 'sport-btn' + (isActive ? ' active' : '');
-        btn.innerHTML = sport + ' <span class="count">(' + count + ')</span>';
-        btn.dataset.sport = sport;
-        btn.style.borderColor = App.getSportColor(sport);
-        btn.addEventListener('click', function() {
-          if (App.selectedSports.has(sport)) {
-            App.selectedSports.delete(sport);
-          } else {
-            App.selectedSports.add(sport);
-          }
-          App.saveSetting('selectedSports', Array.from(App.selectedSports));
-          App.syncSportButtons();
-          App.debounceMapUpdate();
-          App.emit('sportsChanged');
-        });
-        container.appendChild(btn);
+    container.innerHTML = '';
+    sortedSports.forEach(function(entry) {
+      var sport = entry[0];
+      var count = entry[1];
+      var btn = document.createElement('button');
+      var isActive = App.selectedSports.has(sport);
+      btn.className = 'sport-btn' + (isActive ? ' active' : '');
+      btn.innerHTML = sport + ' <span class="count">(' + count + ')</span>';
+      btn.dataset.sport = sport;
+      btn.style.borderColor = App.getSportColor(sport);
+      btn.addEventListener('click', function() {
+        if (App.selectedSports.has(sport)) {
+          App.selectedSports.delete(sport);
+        } else {
+          App.selectedSports.add(sport);
+        }
+        App.saveSetting('selectedSports', Array.from(App.selectedSports));
+        App.syncSportButtons();
+        App.debounceMapUpdate();
       });
+      container.appendChild(btn);
     });
   };
 
   App.syncSportButtons = function() {
-    document.querySelectorAll('.sport-btn').forEach(function(btn) {
+    document.querySelectorAll('#sportButtons .sport-btn').forEach(function(btn) {
       btn.classList.toggle('active', App.selectedSports.has(btn.dataset.sport));
     });
   };
@@ -83,14 +77,10 @@
     if (App.activities.length === 0) {
       document.getElementById('dashboardEmpty').style.display = 'block';
       document.getElementById('dashboardGrid').style.display = 'none';
-      document.getElementById('dashboardSportFilter').style.display = 'none';
-      document.getElementById('dashboardDateFilter').style.display = 'none';
       return;
     }
     document.getElementById('dashboardEmpty').style.display = 'none';
     document.getElementById('dashboardGrid').style.display = '';
-    document.getElementById('dashboardSportFilter').style.display = '';
-    document.getElementById('dashboardDateFilter').style.display = '';
 
     App.ensureDashboardCards();
     App.emit('updateCharts');
@@ -102,6 +92,7 @@
 
     var cards = [
       { id: 'breakdown', title: 'Activity Breakdown' },
+      { id: 'summary', title: 'Year in Sport' },
       { id: 'volume', title: 'Training Volume' },
       { id: 'records', title: 'Personal Bests' },
       { id: 'streaks', title: 'Streaks & Consistency' },
@@ -123,19 +114,7 @@
   };
 
   // --- Listen for events ---
-  App.on('sportsChanged', function() {
-    if (App.state.currentTab === 'stats') {
-      App.updateDashboard();
-    }
-  });
-
   App.on('activitiesLoaded', function() {
-    if (App.state.currentTab === 'stats') {
-      App.updateDashboard();
-    }
-  });
-
-  App.on('dateRangeChanged', function() {
     if (App.state.currentTab === 'stats') {
       App.updateDashboard();
     }

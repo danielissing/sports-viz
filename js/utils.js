@@ -187,5 +187,57 @@ window.StravaApp = {
       this.dateRange.from = saved.from || null;
       this.dateRange.to = saved.to || null;
     }
+  },
+
+  // --- Per-panel date preset helpers ---
+  computeDateRangeFromPreset: function(preset) {
+    if (preset === 'all') return { from: null, to: null };
+    var months = { '3m': 3, '6m': 6, '1y': 12, '2y': 24, '5y': 60 };
+    var m = months[preset];
+    if (!m) return { from: null, to: null };
+    var d = new Date();
+    d.setMonth(d.getMonth() - m);
+    return { from: d.toISOString().slice(0, 10), to: null };
+  },
+
+  filterActivitiesByDateRange: function(activities, dateRange) {
+    if (!dateRange || (!dateRange.from && !dateRange.to)) return activities;
+    return activities.filter(function(a) {
+      var actDate = a.start_date_local.slice(0, 10);
+      if (dateRange.from && actDate < dateRange.from) return false;
+      if (dateRange.to && actDate > dateRange.to) return false;
+      return true;
+    });
+  },
+
+  createDatePresetControls: function(controlsEl, chartId, onChangeCallback) {
+    var self = this;
+    var storageKey = 'panel_' + chartId + '_datePreset';
+    var savedPreset = self.loadSetting(storageKey, 'all');
+
+    var group = document.createElement('div');
+    group.className = 'chart-control-group chart-date-presets';
+
+    var presets = ['3m', '6m', '1y', '2y', '5y', 'all'];
+    var labels = { '3m': '3M', '6m': '6M', '1y': '1Y', '2y': '2Y', '5y': '5Y', 'all': 'All' };
+
+    presets.forEach(function(preset) {
+      var btn = document.createElement('button');
+      btn.className = 'chart-toggle-btn' + (preset === savedPreset ? ' active' : '');
+      btn.textContent = labels[preset];
+      btn.dataset.datePreset = preset;
+      btn.addEventListener('click', function() {
+        group.querySelectorAll('[data-date-preset]').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.datePreset === preset);
+        });
+        self.saveSetting(storageKey, preset);
+        var range = self.computeDateRangeFromPreset(preset);
+        onChangeCallback(range);
+      });
+      group.appendChild(btn);
+    });
+
+    controlsEl.insertBefore(group, controlsEl.firstChild);
+    return self.computeDateRangeFromPreset(savedPreset);
   }
 };
