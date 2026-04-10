@@ -1,6 +1,7 @@
 (function() {
   var App = window.StravaApp;
   var selectedYear = 'last12'; // 'last12' or a year string like '2024'
+  var selectedSport = 'all';   // 'all' or a sport type string
 
   function init() {
     var controlsEl = document.getElementById('controls-streaks');
@@ -8,45 +9,106 @@
     controlsEl.dataset.init = 'true';
   }
 
-  function getYearsInData(filtered) {
+  function getYearsInData(activities) {
     var years = {};
-    filtered.forEach(function(a) {
+    activities.forEach(function(a) {
       var y = new Date(a.start_date_local).getFullYear();
       years[y] = true;
     });
     return Object.keys(years).sort().reverse();
   }
 
-  function renderYearSelector(container, filtered) {
-    var years = getYearsInData(filtered);
-    var selectorEl = container.querySelector('.year-selector');
-    if (!selectorEl) {
-      selectorEl = document.createElement('div');
-      selectorEl.className = 'year-selector';
-      container.insertBefore(selectorEl, container.firstChild);
-    }
-    selectorEl.innerHTML = '';
-
-    // "Last 12mo" button
-    var last12Btn = document.createElement('button');
-    last12Btn.className = 'year-selector-btn' + (selectedYear === 'last12' ? ' active' : '');
-    last12Btn.textContent = 'Last 12mo';
-    last12Btn.addEventListener('click', function() {
-      selectedYear = 'last12';
-      render();
+  function getSportList(activities) {
+    var counts = {};
+    activities.forEach(function(a) {
+      if (a.type) counts[a.type] = (counts[a.type] || 0) + 1;
     });
-    selectorEl.appendChild(last12Btn);
+    return Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; });
+  }
 
-    // Year buttons
-    years.forEach(function(year) {
-      var btn = document.createElement('button');
-      btn.className = 'year-selector-btn' + (selectedYear === year ? ' active' : '');
-      btn.textContent = year;
-      btn.addEventListener('click', function() {
-        selectedYear = year;
+  function filterBySport(activities) {
+    if (selectedSport === 'all') return activities;
+    return activities.filter(function(a) { return a.type === selectedSport; });
+  }
+
+  function getDateRangeForYear() {
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedYear === 'last12') {
+      var start = new Date(today);
+      start.setFullYear(start.getFullYear() - 1);
+      return { from: start.toISOString().slice(0, 10), to: today.toISOString().slice(0, 10) };
+    }
+    var year = parseInt(selectedYear);
+    var endDate = new Date(year, 11, 31);
+    if (endDate > today) endDate = today;
+    return { from: year + '-01-01', to: endDate.toISOString().slice(0, 10) };
+  }
+
+  function filterByDateRange(activities) {
+    var range = getDateRangeForYear();
+    return activities.filter(function(a) {
+      var d = a.start_date_local.slice(0, 10);
+      return d >= range.from && d <= range.to;
+    });
+  }
+
+  function renderControls(container) {
+    var controlsEl = document.getElementById('controls-streaks');
+    if (!controlsEl) return;
+
+    // Year dropdown
+    var yearSelect = controlsEl.querySelector('.year-select');
+    if (!yearSelect) {
+      yearSelect = document.createElement('select');
+      yearSelect.className = 'summary-select year-select';
+      yearSelect.addEventListener('change', function() {
+        selectedYear = yearSelect.value;
         render();
       });
-      selectorEl.appendChild(btn);
+      controlsEl.appendChild(yearSelect);
+    }
+
+    var years = getYearsInData(App.activities);
+    yearSelect.innerHTML = '';
+    var last12Opt = document.createElement('option');
+    last12Opt.value = 'last12';
+    last12Opt.textContent = 'Last 12 months';
+    if (selectedYear === 'last12') last12Opt.selected = true;
+    yearSelect.appendChild(last12Opt);
+    years.forEach(function(year) {
+      var opt = document.createElement('option');
+      opt.value = year;
+      opt.textContent = year;
+      if (selectedYear === year) opt.selected = true;
+      yearSelect.appendChild(opt);
+    });
+
+    // Sport dropdown
+    var sportSelect = controlsEl.querySelector('.sport-select');
+    if (!sportSelect) {
+      sportSelect = document.createElement('select');
+      sportSelect.className = 'summary-select sport-select';
+      sportSelect.addEventListener('change', function() {
+        selectedSport = sportSelect.value;
+        render();
+      });
+      controlsEl.appendChild(sportSelect);
+    }
+
+    var sports = getSportList(App.activities);
+    sportSelect.innerHTML = '';
+    var allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = 'All sports';
+    if (selectedSport === 'all') allOpt.selected = true;
+    sportSelect.appendChild(allOpt);
+    sports.forEach(function(sport) {
+      var opt = document.createElement('option');
+      opt.value = sport;
+      opt.textContent = sport;
+      if (selectedSport === sport) opt.selected = true;
+      sportSelect.appendChild(opt);
     });
   }
 
@@ -54,21 +116,31 @@
     var container = document.getElementById('chart-streaks');
     if (!container) return;
 
-    var filtered = App.getFilteredActivities();
-    if (filtered.length === 0) {
+    if (App.activities.length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
       return;
     }
 
-    // Unique active days (using local date)
+    renderControls(container);
+
+    // Apply both filters
+    var sportFiltered = filterBySport(App.activities);
+    var periodFiltered = filterByDateRange(sportFiltered);
+
+    if (periodFiltered.length === 0) {
+      container.innerHTML = '<div class="chart-empty">No activities in this period</div>';
+      return;
+    }
+
+    // Unique active days within the selected period + sport
     var activeDays = new Set();
-    filtered.forEach(function(a) {
+    periodFiltered.forEach(function(a) {
       activeDays.add(App.getDayKey(a.start_date_local));
     });
 
     var sortedDays = Array.from(activeDays).sort();
 
-    // Calculate longest streak
+    // Calculate longest streak within the period
     var longestStreak = 1;
     var tempStreak = 1;
     for (var i = 1; i < sortedDays.length; i++) {
@@ -85,7 +157,7 @@
     if (tempStreak > longestStreak) longestStreak = tempStreak;
     if (sortedDays.length === 0) longestStreak = 0;
 
-    // Current streak (from today backwards)
+    // Current streak (from today backwards, using sport filter only)
     var currentStreak = 0;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -93,20 +165,26 @@
     var yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
     var yesterdayKey = yesterday.toISOString().slice(0, 10);
 
-    if (activeDays.has(todayKey) || activeDays.has(yesterdayKey)) {
+    // Current streak uses all-time sport-filtered data (not period-limited)
+    var allSportDays = new Set();
+    sportFiltered.forEach(function(a) {
+      allSportDays.add(App.getDayKey(a.start_date_local));
+    });
+
+    if (allSportDays.has(todayKey) || allSportDays.has(yesterdayKey)) {
       currentStreak = 1;
-      var checkDate = activeDays.has(todayKey) ? new Date(today) : new Date(yesterday);
+      var checkDate = allSportDays.has(todayKey) ? new Date(today) : new Date(yesterday);
       while (true) {
         checkDate = new Date(checkDate.getTime() - 24 * 60 * 60 * 1000);
         var key = checkDate.toISOString().slice(0, 10);
-        if (activeDays.has(key)) currentStreak++;
+        if (allSportDays.has(key)) currentStreak++;
         else break;
       }
     }
 
-    // Weekly consistency (weeks with 3+ activities)
+    // Weekly consistency within the period
     var weekCounts = {};
-    filtered.forEach(function(a) {
+    periodFiltered.forEach(function(a) {
       var wk = App.getWeekKey(a.start_date_local);
       weekCounts[wk] = (weekCounts[wk] || 0) + 1;
     });
@@ -124,17 +202,14 @@
     html += '<div class="streak-stat-card"><div class="streak-stat-value">' + consistency + '%</div><div class="streak-stat-label">Weekly Consistency (3+ days)</div></div>';
     html += '</div>';
 
-    // Contribution grid (for selected year only)
-    html += renderContributionGrid(filtered);
+    // Contribution grid
+    html += renderContributionGrid(periodFiltered);
 
     html += '</div>';
     container.innerHTML = html;
-
-    // Add year selector above the grid
-    renderYearSelector(container, filtered);
   }
 
-  function renderContributionGrid(filtered) {
+  function renderContributionGrid(activities) {
     var today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -155,7 +230,7 @@
 
     // Count activities per day
     var dayCounts = {};
-    filtered.forEach(function(a) {
+    activities.forEach(function(a) {
       var key = App.getDayKey(a.start_date_local);
       dayCounts[key] = (dayCounts[key] || 0) + 1;
     });

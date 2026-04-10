@@ -1,6 +1,12 @@
 (function() {
   var App = window.StravaApp;
   var selectedSport = null;
+  var localDateRange = { from: null, to: null };
+  var presetInstalled = false;
+
+  function getLocalFiltered() {
+    return App.filterActivitiesByDateRange(App.activities, localDateRange);
+  }
 
   function getFlaggedIds() {
     return App.loadSetting('flaggedActivityIds', []);
@@ -124,17 +130,15 @@
     return html;
   }
 
-  function buildSportPills(sports) {
+  function buildSportDropdown(sports) {
     var controlsEl = document.getElementById('controls-records');
     if (!controlsEl) return;
 
-    // Sort by activity count, pick default
     var sportList = Object.keys(sports).sort(function(a, b) {
       return sports[b].length - sports[a].length;
     });
 
     if (sportList.length === 0) {
-      controlsEl.innerHTML = '';
       selectedSport = null;
       return;
     }
@@ -144,23 +148,37 @@
       selectedSport = sportList[0];
     }
 
-    controlsEl.innerHTML = '';
-    sportList.forEach(function(sport) {
-      var btn = document.createElement('button');
-      btn.className = 'chart-toggle-btn' + (sport === selectedSport ? ' active' : '');
-      btn.textContent = sport + ' (' + sports[sport].length + ')';
-      btn.dataset.sport = sport;
-      btn.style.borderColor = App.getSportColor(sport);
-      if (sport === selectedSport) {
-        btn.style.background = App.getSportColor(sport);
-        btn.style.borderColor = App.getSportColor(sport);
-        btn.style.color = '#fff';
-      }
-      btn.addEventListener('click', function() {
-        selectedSport = sport;
+    // Find or create dropdown
+    var select = controlsEl.querySelector('.sport-select');
+    if (!select) {
+      select = document.createElement('select');
+      select.className = 'summary-select sport-select';
+      select.addEventListener('change', function() {
+        selectedSport = select.value;
         render();
       });
-      controlsEl.appendChild(btn);
+      controlsEl.appendChild(select);
+    }
+
+    // Rebuild options
+    select.innerHTML = '';
+    sportList.forEach(function(sport) {
+      var opt = document.createElement('option');
+      opt.value = sport;
+      opt.textContent = sport + ' (' + sports[sport].length + ')';
+      if (sport === selectedSport) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function initPresets() {
+    var controlsEl = document.getElementById('controls-records');
+    if (!controlsEl || presetInstalled) return;
+    presetInstalled = true;
+
+    localDateRange = App.createDatePresetControls(controlsEl, 'records', function(range) {
+      localDateRange = range;
+      render();
     });
   }
 
@@ -168,13 +186,18 @@
     var container = document.getElementById('chart-records');
     if (!container) return;
 
-    var filtered = App.getFilteredActivities();
+    var filtered = getLocalFiltered();
     var flagged = getFlaggedIds();
     var clean = filtered.filter(function(a) { return flagged.indexOf(a.id) === -1; });
 
     if (clean.length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
-      document.getElementById('controls-records').innerHTML = '';
+      // Remove sport dropdown if present
+      var controlsEl = document.getElementById('controls-records');
+      if (controlsEl) {
+        var select = controlsEl.querySelector('.sport-select');
+        if (select) select.remove();
+      }
       return;
     }
 
@@ -185,8 +208,8 @@
       sports[a.type].push(a);
     });
 
-    // Build sport pills
-    buildSportPills(sports);
+    // Build sport dropdown
+    buildSportDropdown(sports);
 
     if (!selectedSport || !sports[selectedSport]) {
       container.innerHTML = '<div class="chart-empty">Select a sport</div>';
@@ -222,6 +245,7 @@
   }
 
   App.on('updateCharts', function() {
+    initPresets();
     render();
   });
 })();

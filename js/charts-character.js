@@ -3,6 +3,12 @@
   var chart = null;
   var currentView = 'character'; // 'character' | 'typical'
   var selectedSport = null;
+  var localDateRange = { from: null, to: null };
+  var presetInstalled = false;
+
+  function getLocalFiltered() {
+    return App.filterActivitiesByDateRange(App.activities, localDateRange);
+  }
 
   function median(arr) {
     if (arr.length === 0) return 0;
@@ -22,11 +28,10 @@
     return sports;
   }
 
-  function buildSportPills(sports) {
+  function buildControls(sports) {
     var controlsEl = document.getElementById('controls-character');
     if (!controlsEl) return;
 
-    // Rebuild controls: view toggles + sport pills
     var sportList = Object.keys(sports).sort(function(a, b) {
       return sports[b].length - sports[a].length;
     });
@@ -35,39 +40,57 @@
       selectedSport = sportList[0] || null;
     }
 
-    controlsEl.innerHTML =
-      '<div class="chart-control-group">' +
+    // Build/update view toggles (only once, keep if present)
+    var viewGroup = controlsEl.querySelector('.view-toggle-group');
+    if (!viewGroup) {
+      viewGroup = document.createElement('div');
+      viewGroup.className = 'chart-control-group view-toggle-group';
+      viewGroup.innerHTML =
         '<button class="chart-toggle-btn' + (currentView === 'character' ? ' active' : '') + '" data-cview="character">Character</button>' +
-        '<button class="chart-toggle-btn' + (currentView === 'typical' ? ' active' : '') + '" data-cview="typical">Typical</button>' +
-      '</div>';
+        '<button class="chart-toggle-btn' + (currentView === 'typical' ? ' active' : '') + '" data-cview="typical">Typical</button>';
+      viewGroup.querySelectorAll('[data-cview]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          currentView = btn.dataset.cview;
+          viewGroup.querySelectorAll('[data-cview]').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.cview === currentView);
+          });
+          render();
+        });
+      });
+      controlsEl.appendChild(viewGroup);
+    }
 
-    // Sport pills
-    var pillGroup = document.createElement('div');
-    pillGroup.className = 'chart-control-group';
+    // Find or create sport dropdown
+    var select = controlsEl.querySelector('.sport-select');
+    if (!select) {
+      select = document.createElement('select');
+      select.className = 'summary-select sport-select';
+      select.addEventListener('change', function() {
+        selectedSport = select.value;
+        render();
+      });
+      controlsEl.appendChild(select);
+    }
+
+    // Rebuild options
+    select.innerHTML = '';
     sportList.forEach(function(sport) {
-      var btn = document.createElement('button');
-      btn.className = 'chart-toggle-btn' + (sport === selectedSport ? ' active' : '');
-      btn.textContent = sport + ' (' + sports[sport].length + ')';
-      btn.dataset.csport = sport;
-      if (sport === selectedSport) {
-        btn.style.background = App.getSportColor(sport);
-        btn.style.borderColor = App.getSportColor(sport);
-        btn.style.color = '#fff';
-      }
-      btn.addEventListener('click', function() {
-        selectedSport = sport;
-        render();
-      });
-      pillGroup.appendChild(btn);
+      var opt = document.createElement('option');
+      opt.value = sport;
+      opt.textContent = sport + ' (' + sports[sport].length + ')';
+      if (sport === selectedSport) opt.selected = true;
+      select.appendChild(opt);
     });
-    controlsEl.appendChild(pillGroup);
+  }
 
-    // View toggle listeners
-    controlsEl.querySelectorAll('[data-cview]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        currentView = btn.dataset.cview;
-        render();
-      });
+  function initPresets() {
+    var controlsEl = document.getElementById('controls-character');
+    if (!controlsEl || presetInstalled) return;
+    presetInstalled = true;
+
+    localDateRange = App.createDatePresetControls(controlsEl, 'character', function(range) {
+      localDateRange = range;
+      render();
     });
   }
 
@@ -75,18 +98,21 @@
     var container = document.getElementById('chart-character');
     if (!container) return;
 
-    var filtered = App.getFilteredActivities();
+    var filtered = getLocalFiltered();
     var sports = getSportsFromFiltered(filtered);
 
     if (Object.keys(sports).length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
       if (chart) { chart.destroy(); chart = null; }
       var ctrl = document.getElementById('controls-character');
-      if (ctrl) ctrl.innerHTML = '';
+      if (ctrl) {
+        var select = ctrl.querySelector('.sport-select');
+        if (select) select.remove();
+      }
       return;
     }
 
-    buildSportPills(sports);
+    buildControls(sports);
 
     if (!selectedSport || !sports[selectedSport]) {
       container.innerHTML = '<div class="chart-empty">Select a sport</div>';
@@ -183,9 +209,16 @@
     };
   }
 
+  function getPeriodLabel() {
+    if (!localDateRange.from && !localDateRange.to) return 'All-Time';
+    var presetKey = App.loadSetting('panel_character_datePreset', 'all');
+    var labels = { '3m': 'Last 3 Months', '6m': 'Last 6 Months', '1y': 'Last Year', '2y': 'Last 2 Years', '5y': 'Last 5 Years', 'all': 'All-Time' };
+    return labels[presetKey] || 'Selected Period';
+  }
+
   function buildSummaryBox(stats) {
     var html = '<div class="typical-stat-group">';
-    html += '<h5>All-Time Typical ' + selectedSport + '</h5>';
+    html += '<h5>' + getPeriodLabel() + ' Typical ' + selectedSport + '</h5>';
     html += '<div class="typical-stat-row"><span class="label">Activities</span><span class="value">' + stats.count + '</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Distance</span><span class="value">' + stats.distance.toFixed(1) + ' km</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Duration</span><span class="value">' + App.formatDuration(stats.duration) + '</span></div>';
@@ -206,7 +239,6 @@
 
   function renderTypical(acts) {
     var container = document.getElementById('chart-character');
-    var usesPace = App.isRunType(selectedSport);
 
     // Group by quarter (YYYY-Q#) and compute medians
     var quarters = {};
@@ -214,16 +246,9 @@
       var d = new Date(a.start_date_local);
       var q = Math.floor(d.getMonth() / 3) + 1;
       var key = d.getFullYear() + '-Q' + q;
-      if (!quarters[key]) quarters[key] = { distances: [], durations: [], paces: [], elevations: [] };
+      if (!quarters[key]) quarters[key] = { distances: [], durations: [], elevations: [] };
       quarters[key].distances.push(a.distance / 1000);
       quarters[key].durations.push(a.moving_time / 60);
-      if (a.average_speed > 0 && a.distance >= 500) {
-        if (usesPace) {
-          quarters[key].paces.push((1000 / a.average_speed) / 60);
-        } else {
-          quarters[key].paces.push(a.average_speed * 3.6);
-        }
-      }
       quarters[key].elevations.push(a.total_elevation_gain);
     });
 
@@ -231,19 +256,16 @@
 
     var medianDist = sortedKeys.map(function(k) { return +median(quarters[k].distances).toFixed(1); });
     var medianDur = sortedKeys.map(function(k) { return +median(quarters[k].durations).toFixed(0); });
-    var medianPace = sortedKeys.map(function(k) {
-      return quarters[k].paces.length > 0 ? +median(quarters[k].paces).toFixed(2) : null;
-    });
     var counts = sortedKeys.map(function(k) { return quarters[k].distances.length; });
 
     var color = App.getSportColor(selectedSport);
 
     // Build layout: chart + summary box
-    var allTimeStats = computeAllTimeMedians(acts);
+    var periodStats = computeAllTimeMedians(acts);
     container.innerHTML =
       '<div class="typical-layout">' +
         '<div class="typical-chart"><canvas></canvas></div>' +
-        '<div class="typical-summary">' + buildSummaryBox(allTimeStats) + '</div>' +
+        '<div class="typical-summary">' + buildSummaryBox(periodStats) + '</div>' +
       '</div>';
 
     var canvas = container.querySelector('canvas');
@@ -256,7 +278,6 @@
         backgroundColor: color + '33',
         borderWidth: 2,
         tension: 0.3,
-        yAxisID: 'y',
         fill: true,
         pointRadius: 3
       },
@@ -268,23 +289,9 @@
         borderWidth: 2,
         borderDash: [5, 3],
         tension: 0.3,
-        yAxisID: 'y',
         pointRadius: 3
       }
     ];
-
-    if (medianPace.some(function(v) { return v !== null; })) {
-      datasets.push({
-        label: usesPace ? 'Median Pace (min/km)' : 'Median Speed (km/h)',
-        data: medianPace,
-        borderColor: '#00a9e0',
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        tension: 0.3,
-        yAxisID: 'y2',
-        pointRadius: 3
-      });
-    }
 
     if (chart) chart.destroy();
     chart = new Chart(canvas, {
@@ -297,14 +304,7 @@
         scales: {
           x: { ticks: { maxRotation: 45, maxTicksLimit: 16 } },
           y: {
-            position: 'left',
             title: { display: true, text: 'Distance (km) / Duration (min)' }
-          },
-          y2: {
-            position: 'right',
-            title: { display: true, text: usesPace ? 'Pace (min/km)' : 'Speed (km/h)' },
-            reverse: usesPace,
-            grid: { drawOnChartArea: false }
           }
         },
         plugins: {
@@ -325,6 +325,7 @@
   }
 
   App.on('updateCharts', function() {
+    initPresets();
     render();
   });
 })();

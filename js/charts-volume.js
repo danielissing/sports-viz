@@ -6,11 +6,17 @@
   var metric = 'distance';
   var yoyMode = false;
   var ytdMode = false;
+  var localDateRange = { from: null, to: null };
+  var presetInstalled = false;
+
+  function getLocalFiltered() {
+    return App.filterActivitiesByDateRange(App.activities, localDateRange);
+  }
 
   function getSmartGranularity() {
     if (userOverrodeGranularity && granularity) return granularity;
     // Auto-detect based on filtered data span
-    var filtered = App.getFilteredActivities();
+    var filtered = getLocalFiltered();
     if (filtered.length === 0) return 'monthly';
     var dates = filtered.map(function(a) { return new Date(a.start_date_local).getTime(); });
     var spanMs = Math.max.apply(null, dates) - Math.min.apply(null, dates);
@@ -22,7 +28,8 @@
 
   function init() {
     var controlsEl = document.getElementById('controls-volume');
-    if (!controlsEl || controlsEl.children.length > 0) return;
+    if (!controlsEl || presetInstalled) return;
+    presetInstalled = true;
 
     var effectiveGran = getSmartGranularity();
 
@@ -91,6 +98,11 @@
       this.classList.toggle('active', ytdMode);
       render();
     });
+
+    localDateRange = App.createDatePresetControls(controlsEl, 'volume', function(range) {
+      localDateRange = range;
+      render();
+    });
   }
 
   function getEffectiveGranularity() {
@@ -142,7 +154,7 @@
     var container = document.getElementById('chart-volume');
     if (!container) return;
 
-    var filtered = App.getFilteredActivities();
+    var filtered = getLocalFiltered();
     if (filtered.length === 0) {
       container.innerHTML = '<div class="chart-empty">No activities to display</div>';
       if (chart) { chart.destroy(); chart = null; }
