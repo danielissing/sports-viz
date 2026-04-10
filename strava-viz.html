@@ -130,23 +130,6 @@
   <!-- Stats View -->
   <div id="statsView" class="tab-view" style="display:none;">
     <div class="dashboard-container">
-      <!-- Date range filter duplicated in dashboard -->
-      <div class="dashboard-date-filter" id="dashboardDateFilter" style="display:none;">
-        <div class="date-range-presets">
-          <button class="date-preset-btn" data-preset="3m">3M</button>
-          <button class="date-preset-btn" data-preset="6m">6M</button>
-          <button class="date-preset-btn" data-preset="1y">1Y</button>
-          <button class="date-preset-btn" data-preset="2y">2Y</button>
-          <button class="date-preset-btn" data-preset="5y">5Y</button>
-          <button class="date-preset-btn active" data-preset="all">All</button>
-        </div>
-        <div class="date-range-inputs">
-          <input type="date" id="dashDateFrom" />
-          <span style="color:#666;font-size:12px;">to</span>
-          <input type="date" id="dashDateTo" />
-        </div>
-      </div>
-      <div class="dashboard-sport-filter" id="dashboardSportFilter" style="display:none;"></div>
       <div class="dashboard-grid" id="dashboardGrid" style="display:none;"></div>
       <div class="dashboard-empty" id="dashboardEmpty">
         <p>Load activities from the Map tab to see your stats dashboard.</p>
@@ -171,6 +154,7 @@
   <script src="js/charts-records.js"></script>
   <script src="js/charts-streaks.js"></script>
   <script src="js/charts-character.js"></script>
+  <script src="js/charts-summary.js"></script>
 
 </body>
 </html>
