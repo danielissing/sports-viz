@@ -13,11 +13,14 @@
   <div class="tab-bar" id="tabBar">
     <button class="tab-btn active" data-tab="map">Map</button>
     <button class="tab-btn" data-tab="stats">Stats</button>
+    <button class="tab-btn theme-toggle" id="themeToggle" title="Toggle dark mode">&#9790;</button>
   </div>
 
   <!-- Map View -->
   <div id="mapView" class="tab-view">
     <div id="map"></div>
+
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">&#8249;</button>
 
     <div class="controls" id="mapControls">
       <h3>Strava Sports Viz</h3>
@@ -51,9 +54,9 @@
 
       <div class="loading" id="loading">
         <div class="spinner"></div>
-        <div style="color:#fc4c02;margin-top:10px;">Loading activities...</div>
+        <div style="color:var(--accent);margin-top:10px;">Loading activities...</div>
         <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
-        <div id="progressText" style="color:#666;font-size:12px;margin-top:5px;"></div>
+        <div id="progressText" style="color:var(--text-secondary);font-size:12px;margin-top:5px;"></div>
       </div>
 
       <div class="message error" id="error"></div>
@@ -72,7 +75,7 @@
         </div>
         <div class="date-range-inputs">
           <input type="date" id="dateFrom" />
-          <span style="color:#666;font-size:12px;">to</span>
+          <span style="color:var(--text-secondary);font-size:12px;">to</span>
           <input type="date" id="dateTo" />
         </div>
       </div>
@@ -113,7 +116,7 @@
           <input type="range" id="lineWidth" min="1" max="5" value="2" />
         </div>
 
-        <button id="updateMap" style="background:#4CAF50;">Update Map</button>
+        <button id="updateMap" class="sync-btn">Update Map</button>
         <div class="help-text">Zoom & position are always preserved after the first fit.</div>
       </div>
 

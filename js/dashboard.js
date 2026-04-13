@@ -2,15 +2,30 @@
   var App = window.StravaApp;
 
   // --- Tab switching ---
-  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       App.switchTab(btn.dataset.tab);
     });
   });
 
+  // --- Theme toggle ---
+  var themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', function() {
+      App.toggleTheme();
+    });
+  }
+
+  // Re-render charts when theme changes
+  App.on('themeChanged', function() {
+    if (App.state.currentTab === 'stats' && App.activities.length > 0) {
+      App.emit('updateCharts');
+    }
+  });
+
   App.switchTab = function(tab) {
     App.state.currentTab = tab;
-    document.querySelectorAll('.tab-btn').forEach(function(b) {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b) {
       b.classList.toggle('active', b.dataset.tab === tab);
     });
     document.getElementById('mapView').style.display = (tab === 'map') ? '' : 'none';
@@ -48,10 +63,14 @@
       var count = entry[1];
       var btn = document.createElement('button');
       var isActive = App.selectedSports.has(sport);
+      var sportColor = App.getSportColor(sport);
       btn.className = 'sport-btn' + (isActive ? ' active' : '');
       btn.innerHTML = sport + ' <span class="count">(' + count + ')</span>';
       btn.dataset.sport = sport;
-      btn.style.borderColor = App.getSportColor(sport);
+      btn.style.borderColor = sportColor;
+      if (isActive) {
+        btn.style.backgroundColor = sportColor;
+      }
       btn.addEventListener('click', function() {
         if (App.selectedSports.has(sport)) {
           App.selectedSports.delete(sport);
@@ -68,7 +87,9 @@
 
   App.syncSportButtons = function() {
     document.querySelectorAll('#sportButtons .sport-btn').forEach(function(btn) {
-      btn.classList.toggle('active', App.selectedSports.has(btn.dataset.sport));
+      var isActive = App.selectedSports.has(btn.dataset.sport);
+      btn.classList.toggle('active', isActive);
+      btn.style.backgroundColor = isActive ? App.getSportColor(btn.dataset.sport) : '';
     });
   };
 

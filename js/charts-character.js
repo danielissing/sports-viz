@@ -326,7 +326,7 @@
       {
         label: 'Avg Duration (min)',
         data: avgDur,
-        borderColor: '#666',
+        borderColor: App.getCSSVar('--text-secondary', '#666'),
         backgroundColor: 'transparent',
         borderWidth: 2,
         borderDash: [5, 3],
