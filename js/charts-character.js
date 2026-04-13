@@ -366,6 +366,14 @@
     App.charts.character = chart;
   }
 
+  // Expose pure functions for testing
+  if (window._test) {
+    window._test.character = {
+      mean: mean,
+      getSportsFromFiltered: getSportsFromFiltered
+    };
+  }
+
   App.on('updateCharts', function() {
     initPresets();
     render();

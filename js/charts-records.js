@@ -244,6 +244,14 @@
     });
   }
 
+  // Expose pure functions for testing
+  if (window._test) {
+    window._test.records = {
+      isSuspicious: isSuspicious,
+      buildRecords: buildRecords
+    };
+  }
+
   App.on('updateCharts', function() {
     initPresets();
     render();
