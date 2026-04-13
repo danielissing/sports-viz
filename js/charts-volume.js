@@ -4,8 +4,7 @@
   var granularity = null; // null = auto-detect
   var userOverrodeGranularity = false;
   var metric = 'distance';
-  var yoyMode = false;
-  var ytdMode = false;
+  var viewMode = 'stacked'; // 'stacked', 'yoy', or 'ytd'
   var localDateRange = { from: null, to: null };
   var presetInstalled = false;
   var selectedSport = ''; // '' = all sports
@@ -131,9 +130,10 @@
       '<div class="chart-control-group">' + dateSelectHtml + '</div>' +
       '<div class="chart-control-group">' + metricSelectHtml + '</div>' +
       '<div class="chart-control-group" id="volumeGranGroup">' + granSelectHtml + '</div>' +
-      '<div class="chart-control-group">' +
-        '<button class="chart-toggle-btn" id="yoyToggle">Year-over-Year</button>' +
-        '<button class="chart-toggle-btn" id="ytdToggle">Cumulative YTD</button>' +
+      '<div class="chart-control-group chart-view-toggle">' +
+        '<button class="chart-toggle-btn active" data-view="stacked">Stacked</button>' +
+        '<button class="chart-toggle-btn" data-view="yoy">Year-over-Year</button>' +
+        '<button class="chart-toggle-btn" data-view="ytd">Cumulative YTD</button>' +
       '</div>';
 
     // Date range handler
@@ -158,39 +158,36 @@
       render();
     });
 
-    document.getElementById('yoyToggle').addEventListener('click', function() {
-      yoyMode = !yoyMode;
-      if (yoyMode) {
-        ytdMode = false;
-        document.getElementById('ytdToggle').classList.remove('active');
-        var g = getEffectiveGranularity();
-        if (g === 'yearly') {
-          granularity = 'monthly';
-          userOverrodeGranularity = true;
-          document.getElementById('volumeGranularity').value = 'monthly';
-        }
-      }
-      this.classList.toggle('active', yoyMode);
-      updateGranularityVisibility();
-      render();
-    });
+    controlsEl.querySelectorAll('.chart-view-toggle .chart-toggle-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var newMode = this.getAttribute('data-view');
+        if (newMode === viewMode) return;
 
-    document.getElementById('ytdToggle').addEventListener('click', function() {
-      ytdMode = !ytdMode;
-      if (ytdMode) {
-        yoyMode = false;
-        document.getElementById('yoyToggle').classList.remove('active');
-      }
-      this.classList.toggle('active', ytdMode);
-      updateGranularityVisibility();
-      render();
+        viewMode = newMode;
+
+        controlsEl.querySelectorAll('.chart-view-toggle .chart-toggle-btn').forEach(function(b) {
+          b.classList.toggle('active', b.getAttribute('data-view') === viewMode);
+        });
+
+        if (viewMode === 'yoy') {
+          var g = getEffectiveGranularity();
+          if (g === 'yearly') {
+            granularity = 'monthly';
+            userOverrodeGranularity = true;
+            document.getElementById('volumeGranularity').value = 'monthly';
+          }
+        }
+
+        updateGranularityVisibility();
+        render();
+      });
     });
   }
 
   function updateGranularityVisibility() {
     var granGroup = document.getElementById('volumeGranGroup');
     if (granGroup) {
-      granGroup.style.display = ytdMode ? 'none' : '';
+      granGroup.style.display = viewMode === 'ytd' ? 'none' : '';
     }
   }
 
@@ -266,14 +263,14 @@
     if (!userOverrodeGranularity) updateGranularityDropdown();
     updateGranularityVisibility();
 
-    if (ytdMode) {
+    if (viewMode === 'ytd') {
       renderYTD(filtered);
     } else {
       if (!container.querySelector('canvas') || container.querySelector('.ytd-layout')) {
         container.innerHTML = '<canvas></canvas>';
       }
       var canvas = container.querySelector('canvas');
-      if (yoyMode) {
+      if (viewMode === 'yoy') {
         renderYoY(canvas, filtered);
       } else {
         renderStacked(canvas, filtered);

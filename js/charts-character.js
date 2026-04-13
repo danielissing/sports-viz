@@ -10,11 +10,11 @@
     return App.filterActivitiesByDateRange(App.activities, localDateRange);
   }
 
-  function median(arr) {
+  function mean(arr) {
     if (arr.length === 0) return 0;
-    var sorted = arr.slice().sort(function(a, b) { return a - b; });
-    var mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    var sum = 0;
+    for (var i = 0; i < arr.length; i++) sum += arr[i];
+    return sum / arr.length;
   }
 
   function getSportsFromFiltered(filtered) {
@@ -184,7 +184,7 @@
     App.charts.character = chart;
   }
 
-  function computeAllTimeMedians(acts) {
+  function computeAllTimeAverages(acts) {
     var distances = [], durations = [], paces = [], elevations = [];
     var usesPace = App.isRunType(selectedSport);
     acts.forEach(function(a) {
@@ -200,10 +200,10 @@
       }
     });
     return {
-      distance: median(distances),
-      duration: median(durations),
-      elevation: median(elevations),
-      pace: paces.length > 0 ? median(paces) : null,
+      distance: mean(distances),
+      duration: mean(durations),
+      elevation: mean(elevations),
+      pace: paces.length > 0 ? mean(paces) : null,
       count: acts.length,
       usesPace: usesPace
     };
@@ -218,7 +218,7 @@
 
   function buildSummaryBox(stats) {
     var html = '<div class="typical-stat-group">';
-    html += '<h5>' + getPeriodLabel() + ' Typical ' + selectedSport + '</h5>';
+    html += '<h5>' + getPeriodLabel() + ' Average ' + selectedSport + '</h5>';
     html += '<div class="typical-stat-row"><span class="label">Activities</span><span class="value">' + stats.count + '</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Distance</span><span class="value">' + stats.distance.toFixed(1) + ' km</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Duration</span><span class="value">' + App.formatDuration(stats.duration) + '</span></div>';
@@ -240,7 +240,7 @@
   function renderTypical(acts) {
     var container = document.getElementById('chart-character');
 
-    // Group by quarter (YYYY-Q#) and compute medians
+    // Group by quarter (YYYY-Q#) and compute averages
     var quarters = {};
     acts.forEach(function(a) {
       var d = new Date(a.start_date_local);
@@ -254,14 +254,14 @@
 
     var sortedKeys = Object.keys(quarters).sort();
 
-    var medianDist = sortedKeys.map(function(k) { return +median(quarters[k].distances).toFixed(1); });
-    var medianDur = sortedKeys.map(function(k) { return +median(quarters[k].durations).toFixed(0); });
+    var avgDist = sortedKeys.map(function(k) { return +mean(quarters[k].distances).toFixed(1); });
+    var avgDur = sortedKeys.map(function(k) { return +mean(quarters[k].durations).toFixed(0); });
     var counts = sortedKeys.map(function(k) { return quarters[k].distances.length; });
 
     var color = App.getSportColor(selectedSport);
 
     // Build layout: chart + summary box
-    var periodStats = computeAllTimeMedians(acts);
+    var periodStats = computeAllTimeAverages(acts);
     container.innerHTML =
       '<div class="typical-layout">' +
         '<div class="typical-chart"><canvas></canvas></div>' +
@@ -272,8 +272,8 @@
 
     var datasets = [
       {
-        label: 'Median Distance (km)',
-        data: medianDist,
+        label: 'Avg Distance (km)',
+        data: avgDist,
         borderColor: color,
         backgroundColor: color + '33',
         borderWidth: 2,
@@ -282,8 +282,8 @@
         pointRadius: 3
       },
       {
-        label: 'Median Duration (min)',
-        data: medianDur,
+        label: 'Avg Duration (min)',
+        data: avgDur,
         borderColor: '#666',
         backgroundColor: 'transparent',
         borderWidth: 2,

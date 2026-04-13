@@ -240,7 +240,7 @@
     Object.values(dayCounts).forEach(function(c) { if (c > maxCount) maxCount = c; });
     if (maxCount === 0) maxCount = 1;
 
-    var cellSize = 12;
+    var cellSize = 9;
     var cellGap = 2;
     var totalSize = cellSize + cellGap;
 
