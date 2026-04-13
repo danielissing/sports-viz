@@ -238,6 +238,15 @@
     App.charts.breakdown = chart;
   }
 
+  // Expose pure functions for testing
+  if (window._test) {
+    window._test.breakdown = {
+      groupWithOther: groupWithOther,
+      formatDisplayValue: formatDisplayValue,
+      _setMode: function(m) { currentMode = m; }
+    };
+  }
+
   App.on('updateCharts', function() {
     init();
     render();

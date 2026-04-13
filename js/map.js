@@ -1,6 +1,9 @@
 (function() {
   var App = window.StravaApp;
 
+  // --- Initialize theme (Chart.js is loaded by now) ---
+  App.initTheme();
+
   // --- Map state ---
   var routeLayers = [];
   var heatLayer = null;
@@ -489,4 +492,43 @@
       setTimeout(function() { mapInstance.invalidateSize(); }, 100);
     }
   });
+
+  // --- Collapsible sidebar ---
+  (function() {
+    var controls = document.getElementById('mapControls');
+    var toggleBtn = document.getElementById('sidebarToggle');
+    if (!controls || !toggleBtn) return;
+
+    var collapsed = App.loadSetting('sidebarCollapsed', false);
+
+    function updateSidebar() {
+      controls.classList.toggle('collapsed', collapsed);
+      toggleBtn.innerHTML = collapsed ? '&#8250;' : '&#8249;';
+      // Position the toggle relative to the controls panel
+      if (collapsed) {
+        toggleBtn.style.right = '20px';
+      } else {
+        toggleBtn.style.right = (controls.offsetWidth + 20 + 8) + 'px';
+      }
+    }
+
+    function repositionToggle() {
+      if (!collapsed) {
+        toggleBtn.style.right = (controls.offsetWidth + 20 + 8) + 'px';
+      }
+    }
+
+    toggleBtn.addEventListener('click', function() {
+      collapsed = !collapsed;
+      App.saveSetting('sidebarCollapsed', collapsed);
+      updateSidebar();
+      // After transition ends, tell Leaflet to recalculate
+      setTimeout(function() { mapInstance.invalidateSize(); }, 350);
+    });
+
+    window.addEventListener('resize', repositionToggle);
+
+    // Initial state
+    updateSidebar();
+  })();
 })();

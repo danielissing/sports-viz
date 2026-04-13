@@ -210,6 +210,8 @@
   }
 
   function renderContributionGrid(activities) {
+    var textSecondary = App.getCSSVar('--text-secondary', '#666');
+    var streakEmpty = App.getCSSVar('--streak-empty', '#ebedf0');
     var today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -268,7 +270,7 @@
     var dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
     for (var i = 0; i < 7; i++) {
       if (i % 2 === 1) {
-        svg += '<text x="0" y="' + (i * totalSize + cellSize + 20) + '" font-size="9" fill="#666">' + dayLabels[i] + '</text>';
+        svg += '<text x="0" y="' + (i * totalSize + cellSize + 20) + '" font-size="9" fill="' + textSecondary + '">' + dayLabels[i] + '</text>';
       }
     }
 
@@ -279,7 +281,7 @@
       var dayInWeek = week[0];
       if (dayInWeek && dayInWeek.getMonth() !== lastMonth) {
         lastMonth = dayInWeek.getMonth();
-        svg += '<text x="' + (wi * totalSize + 15) + '" y="12" font-size="9" fill="#666">' + monthNames[lastMonth] + '</text>';
+        svg += '<text x="' + (wi * totalSize + 15) + '" y="12" font-size="9" fill="' + textSecondary + '">' + monthNames[lastMonth] + '</text>';
       }
     });
 
@@ -290,7 +292,7 @@
         var count = dayCounts[key] || 0;
         var intensity = count / maxCount;
         var color;
-        if (count === 0) color = '#ebedf0';
+        if (count === 0) color = streakEmpty;
         else if (intensity <= 0.25) color = '#ffd4b8';
         else if (intensity <= 0.5) color = '#ff9b63';
         else if (intensity <= 0.75) color = '#fc6b14';

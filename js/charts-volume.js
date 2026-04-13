@@ -424,19 +424,21 @@
       var xPixel = xScale.getPixelForValue(todayDay);
       if (xPixel < xScale.left || xPixel > xScale.right) return;
 
+      var lineColor = App.getCSSVar('--text-secondary', 'rgba(0,0,0,0.35)');
+      var textColor = App.getCSSVar('--text-primary', 'rgba(0,0,0,0.5)');
       var ctx = chartInstance.ctx;
       var yScale = chartInstance.scales.y;
       ctx.save();
       ctx.beginPath();
       ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.strokeStyle = lineColor;
       ctx.lineWidth = 1.5;
       ctx.moveTo(xPixel, yScale.top);
       ctx.lineTo(xPixel, yScale.bottom);
       ctx.stroke();
 
       ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillStyle = textColor;
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('Today', xPixel, yScale.top - 4);

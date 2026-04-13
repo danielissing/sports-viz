@@ -326,7 +326,7 @@
       {
         label: 'Avg Duration (min)',
         data: avgDur,
-        borderColor: '#666',
+        borderColor: App.getCSSVar('--text-secondary', '#666'),
         backgroundColor: 'transparent',
         borderWidth: 2,
         borderDash: [5, 3],
@@ -364,6 +364,14 @@
       }
     });
     App.charts.character = chart;
+  }
+
+  // Expose pure functions for testing
+  if (window._test) {
+    window._test.character = {
+      mean: mean,
+      getSportsFromFiltered: getSportsFromFiltered
+    };
   }
 
   App.on('updateCharts', function() {

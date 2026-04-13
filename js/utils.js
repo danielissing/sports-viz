@@ -210,6 +210,64 @@ window.StravaApp = {
     });
   },
 
+  // --- Theme helpers ---
+  initTheme: function() {
+    var saved = this.loadSetting('theme', null);
+    var theme;
+    if (saved) {
+      theme = saved;
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      theme = 'dark';
+    } else {
+      theme = 'light';
+    }
+    this.applyTheme(theme);
+
+    // Listen for system preference changes (only when no explicit override)
+    var self = this;
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+        if (!self.loadSetting('theme', null)) {
+          self.applyTheme(e.matches ? 'dark' : 'light');
+        }
+      });
+    }
+  },
+
+  applyTheme: function(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    this.state.theme = theme;
+
+    // Update toggle icon
+    var toggle = document.getElementById('themeToggle');
+    if (toggle) {
+      toggle.innerHTML = theme === 'dark' ? '&#9788;' : '&#9790;';
+    }
+
+    // Update Chart.js defaults if available
+    if (typeof Chart !== 'undefined') {
+      var textColor = theme === 'dark' ? '#e0e0e0' : '#666';
+      var gridColor = theme === 'dark' ? '#444' : 'rgba(0,0,0,0.1)';
+      Chart.defaults.color = textColor;
+      Chart.defaults.borderColor = gridColor;
+    }
+
+    this.emit('themeChanged', theme);
+  },
+
+  toggleTheme: function() {
+    var current = this.state.theme || 'light';
+    var next = current === 'dark' ? 'light' : 'dark';
+    this.saveSetting('theme', next);
+    this.applyTheme(next);
+  },
+
+  // --- CSS variable reader helper ---
+  getCSSVar: function(name, fallback) {
+    var val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return val || fallback;
+  },
+
   createDatePresetControls: function(controlsEl, chartId, onChangeCallback) {
     var self = this;
     var storageKey = 'panel_' + chartId + '_datePreset';
