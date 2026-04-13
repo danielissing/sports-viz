@@ -4,6 +4,7 @@
   var currentView = 'character'; // 'character' | 'typical'
   var selectedSport = null;
   var localDateRange = { from: null, to: null };
+  var logScale = false;
   var presetInstalled = false;
 
   function getLocalFiltered() {
@@ -54,11 +55,33 @@
           viewGroup.querySelectorAll('[data-cview]').forEach(function(b) {
             b.classList.toggle('active', b.dataset.cview === currentView);
           });
+          updateScaleToggleVisibility();
           render();
         });
       });
       controlsEl.appendChild(viewGroup);
     }
+
+    // Log scale toggle (only relevant for Character scatter view)
+    var scaleGroup = controlsEl.querySelector('.scale-toggle-group');
+    if (!scaleGroup) {
+      scaleGroup = document.createElement('div');
+      scaleGroup.className = 'chart-control-group scale-toggle-group';
+      scaleGroup.innerHTML =
+        '<button class="chart-toggle-btn active" data-scale="linear">Linear</button>' +
+        '<button class="chart-toggle-btn" data-scale="log">Log</button>';
+      scaleGroup.querySelectorAll('[data-scale]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          logScale = btn.dataset.scale === 'log';
+          scaleGroup.querySelectorAll('[data-scale]').forEach(function(b) {
+            b.classList.toggle('active', (b.dataset.scale === 'log') === logScale);
+          });
+          render();
+        });
+      });
+      controlsEl.appendChild(scaleGroup);
+    }
+    updateScaleToggleVisibility();
 
     // Find or create sport dropdown
     var select = controlsEl.querySelector('.sport-select');
@@ -81,6 +104,15 @@
       if (sport === selectedSport) opt.selected = true;
       select.appendChild(opt);
     });
+  }
+
+  function updateScaleToggleVisibility() {
+    var controlsEl = document.getElementById('controls-character');
+    if (!controlsEl) return;
+    var scaleGroup = controlsEl.querySelector('.scale-toggle-group');
+    if (scaleGroup) {
+      scaleGroup.style.display = currentView === 'character' ? '' : 'none';
+    }
   }
 
   function initPresets() {
@@ -165,8 +197,18 @@
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { title: { display: true, text: 'Distance (km)' }, beginAtZero: true },
-          y: { title: { display: true, text: 'Elevation Gain (m)' }, beginAtZero: true }
+          x: {
+            type: logScale ? 'logarithmic' : 'linear',
+            title: { display: true, text: 'Distance (km)' },
+            beginAtZero: !logScale,
+            min: logScale ? 0.1 : undefined
+          },
+          y: {
+            type: logScale ? 'logarithmic' : 'linear',
+            title: { display: true, text: 'Elevation Gain (m)' },
+            beginAtZero: !logScale,
+            min: logScale ? 1 : undefined
+          }
         },
         plugins: {
           legend: { display: false },

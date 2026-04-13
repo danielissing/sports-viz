@@ -215,6 +215,7 @@
           },
           y: {
             stacked: true,
+            beginAtZero: true,
             max: normalized ? 100 : undefined,
             title: { display: true, text: normalized ? 'Share (%)' : getModeYLabel() },
             ticks: normalized ? { callback: function(v) { return v + '%'; } } : {}
