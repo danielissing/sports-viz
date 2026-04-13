@@ -4,17 +4,18 @@
   var currentView = 'character'; // 'character' | 'typical'
   var selectedSport = null;
   var localDateRange = { from: null, to: null };
+  var logScale = false;
   var presetInstalled = false;
 
   function getLocalFiltered() {
     return App.filterActivitiesByDateRange(App.activities, localDateRange);
   }
 
-  function median(arr) {
+  function mean(arr) {
     if (arr.length === 0) return 0;
-    var sorted = arr.slice().sort(function(a, b) { return a - b; });
-    var mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    var sum = 0;
+    for (var i = 0; i < arr.length; i++) sum += arr[i];
+    return sum / arr.length;
   }
 
   function getSportsFromFiltered(filtered) {
@@ -54,11 +55,33 @@
           viewGroup.querySelectorAll('[data-cview]').forEach(function(b) {
             b.classList.toggle('active', b.dataset.cview === currentView);
           });
+          updateScaleToggleVisibility();
           render();
         });
       });
       controlsEl.appendChild(viewGroup);
     }
+
+    // Log scale toggle (only relevant for Character scatter view)
+    var scaleGroup = controlsEl.querySelector('.scale-toggle-group');
+    if (!scaleGroup) {
+      scaleGroup = document.createElement('div');
+      scaleGroup.className = 'chart-control-group scale-toggle-group';
+      scaleGroup.innerHTML =
+        '<button class="chart-toggle-btn active" data-scale="linear">Linear</button>' +
+        '<button class="chart-toggle-btn" data-scale="log">Log</button>';
+      scaleGroup.querySelectorAll('[data-scale]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          logScale = btn.dataset.scale === 'log';
+          scaleGroup.querySelectorAll('[data-scale]').forEach(function(b) {
+            b.classList.toggle('active', (b.dataset.scale === 'log') === logScale);
+          });
+          render();
+        });
+      });
+      controlsEl.appendChild(scaleGroup);
+    }
+    updateScaleToggleVisibility();
 
     // Find or create sport dropdown
     var select = controlsEl.querySelector('.sport-select');
@@ -81,6 +104,15 @@
       if (sport === selectedSport) opt.selected = true;
       select.appendChild(opt);
     });
+  }
+
+  function updateScaleToggleVisibility() {
+    var controlsEl = document.getElementById('controls-character');
+    if (!controlsEl) return;
+    var scaleGroup = controlsEl.querySelector('.scale-toggle-group');
+    if (scaleGroup) {
+      scaleGroup.style.display = currentView === 'character' ? '' : 'none';
+    }
   }
 
   function initPresets() {
@@ -165,8 +197,18 @@
         responsive: true,
         maintainAspectRatio: false,
         scales: {
-          x: { title: { display: true, text: 'Distance (km)' }, beginAtZero: true },
-          y: { title: { display: true, text: 'Elevation Gain (m)' }, beginAtZero: true }
+          x: {
+            type: logScale ? 'logarithmic' : 'linear',
+            title: { display: true, text: 'Distance (km)' },
+            beginAtZero: !logScale,
+            min: logScale ? 0.1 : undefined
+          },
+          y: {
+            type: logScale ? 'logarithmic' : 'linear',
+            title: { display: true, text: 'Elevation Gain (m)' },
+            beginAtZero: !logScale,
+            min: logScale ? 1 : undefined
+          }
         },
         plugins: {
           legend: { display: false },
@@ -184,7 +226,7 @@
     App.charts.character = chart;
   }
 
-  function computeAllTimeMedians(acts) {
+  function computeAllTimeAverages(acts) {
     var distances = [], durations = [], paces = [], elevations = [];
     var usesPace = App.isRunType(selectedSport);
     acts.forEach(function(a) {
@@ -200,10 +242,10 @@
       }
     });
     return {
-      distance: median(distances),
-      duration: median(durations),
-      elevation: median(elevations),
-      pace: paces.length > 0 ? median(paces) : null,
+      distance: mean(distances),
+      duration: mean(durations),
+      elevation: mean(elevations),
+      pace: paces.length > 0 ? mean(paces) : null,
       count: acts.length,
       usesPace: usesPace
     };
@@ -218,7 +260,7 @@
 
   function buildSummaryBox(stats) {
     var html = '<div class="typical-stat-group">';
-    html += '<h5>' + getPeriodLabel() + ' Typical ' + selectedSport + '</h5>';
+    html += '<h5>' + getPeriodLabel() + ' Average ' + selectedSport + '</h5>';
     html += '<div class="typical-stat-row"><span class="label">Activities</span><span class="value">' + stats.count + '</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Distance</span><span class="value">' + stats.distance.toFixed(1) + ' km</span></div>';
     html += '<div class="typical-stat-row"><span class="label">Duration</span><span class="value">' + App.formatDuration(stats.duration) + '</span></div>';
@@ -240,7 +282,7 @@
   function renderTypical(acts) {
     var container = document.getElementById('chart-character');
 
-    // Group by quarter (YYYY-Q#) and compute medians
+    // Group by quarter (YYYY-Q#) and compute averages
     var quarters = {};
     acts.forEach(function(a) {
       var d = new Date(a.start_date_local);
@@ -254,14 +296,14 @@
 
     var sortedKeys = Object.keys(quarters).sort();
 
-    var medianDist = sortedKeys.map(function(k) { return +median(quarters[k].distances).toFixed(1); });
-    var medianDur = sortedKeys.map(function(k) { return +median(quarters[k].durations).toFixed(0); });
+    var avgDist = sortedKeys.map(function(k) { return +mean(quarters[k].distances).toFixed(1); });
+    var avgDur = sortedKeys.map(function(k) { return +mean(quarters[k].durations).toFixed(0); });
     var counts = sortedKeys.map(function(k) { return quarters[k].distances.length; });
 
     var color = App.getSportColor(selectedSport);
 
     // Build layout: chart + summary box
-    var periodStats = computeAllTimeMedians(acts);
+    var periodStats = computeAllTimeAverages(acts);
     container.innerHTML =
       '<div class="typical-layout">' +
         '<div class="typical-chart"><canvas></canvas></div>' +
@@ -272,8 +314,8 @@
 
     var datasets = [
       {
-        label: 'Median Distance (km)',
-        data: medianDist,
+        label: 'Avg Distance (km)',
+        data: avgDist,
         borderColor: color,
         backgroundColor: color + '33',
         borderWidth: 2,
@@ -282,8 +324,8 @@
         pointRadius: 3
       },
       {
-        label: 'Median Duration (min)',
-        data: medianDur,
+        label: 'Avg Duration (min)',
+        data: avgDur,
         borderColor: '#666',
         backgroundColor: 'transparent',
         borderWidth: 2,

@@ -2,6 +2,7 @@
   var App = window.StravaApp;
   var chart = null;
   var currentMode = 'count';
+  var normalized = false;
   var localDateRange = { from: null, to: null };
   var presetInstalled = false;
 
@@ -19,6 +20,10 @@
         '<button class="chart-toggle-btn active" data-mode="count">By Count</button>' +
         '<button class="chart-toggle-btn" data-mode="distance">By Distance</button>' +
         '<button class="chart-toggle-btn" data-mode="duration">By Duration</button>' +
+      '</div>' +
+      '<div class="chart-control-group">' +
+        '<button class="chart-toggle-btn active" data-view="stacked">Stacked</button>' +
+        '<button class="chart-toggle-btn" data-view="normalized">%</button>' +
       '</div>';
 
     controlsEl.querySelectorAll('[data-mode]').forEach(function(btn) {
@@ -26,6 +31,16 @@
         currentMode = btn.dataset.mode;
         controlsEl.querySelectorAll('[data-mode]').forEach(function(b) {
           b.classList.toggle('active', b.dataset.mode === currentMode);
+        });
+        render();
+      });
+    });
+
+    controlsEl.querySelectorAll('[data-view]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        normalized = btn.dataset.view === 'normalized';
+        controlsEl.querySelectorAll('[data-view]').forEach(function(b) {
+          b.classList.toggle('active', (b.dataset.view === 'normalized') === normalized);
         });
         render();
       });
@@ -150,15 +165,33 @@
       .map(function(e) { return e[0]; });
     if (hasOther) sportOrder.push('Other');
 
+    // Compute raw values per sport per month
+    var rawData = {};
+    sportOrder.forEach(function(sport) {
+      rawData[sport] = sortedKeys.map(function(key) {
+        var bucket = buckets[key][sport];
+        if (!bucket) return 0;
+        return formatDisplayValue(sport, bucket);
+      });
+    });
+
+    // Compute column totals for normalization
+    var columnTotals = sortedKeys.map(function(_, i) {
+      var total = 0;
+      sportOrder.forEach(function(sport) { total += rawData[sport][i]; });
+      return total;
+    });
+
     var datasets = sportOrder.map(function(sport) {
       var color = App.getSportColor(sport);
+      var data = normalized
+        ? rawData[sport].map(function(v, i) {
+            return columnTotals[i] > 0 ? +(v / columnTotals[i] * 100).toFixed(1) : 0;
+          })
+        : rawData[sport];
       return {
         label: sport,
-        data: sortedKeys.map(function(key) {
-          var bucket = buckets[key][sport];
-          if (!bucket) return 0;
-          return formatDisplayValue(sport, bucket);
-        }),
+        data: data,
         backgroundColor: color + 'B3',
         borderColor: color,
         borderWidth: 1,
@@ -182,7 +215,10 @@
           },
           y: {
             stacked: true,
-            title: { display: true, text: getModeYLabel() }
+            beginAtZero: true,
+            max: normalized ? 100 : undefined,
+            title: { display: true, text: normalized ? 'Share (%)' : getModeYLabel() },
+            ticks: normalized ? { callback: function(v) { return v + '%'; } } : {}
           }
         },
         plugins: {
@@ -191,6 +227,7 @@
             mode: 'index',
             callbacks: {
               label: function(ctx) {
+                if (normalized) return ctx.dataset.label + ': ' + ctx.raw + '%';
                 return ctx.dataset.label + ': ' + ctx.raw + getModeSuffix();
               }
             }

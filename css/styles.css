@@ -658,13 +658,13 @@ input[type="range"] {
 
 .streak-stat-card {
   text-align: center;
-  padding: 15px;
+  padding: 10px;
   background: #f8f8f8;
   border-radius: 8px;
 }
 
 .streak-stat-value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #fc4c02;
 }
@@ -936,9 +936,12 @@ input[type="range"] {
 
 /* === Full-width cards === */
 #card-volume,
-#card-records,
-#card-streaks {
+#card-records {
   grid-column: 1 / -1;
+}
+
+#card-streaks .chart-body {
+  min-height: auto;
 }
 
 /* === Responsive === */
