@@ -188,6 +188,25 @@
     document.getElementById('credsArrow').classList.toggle('collapsed');
   });
 
+  // --- Connect with Strava button ---
+  function updateConnectButton() {
+    var clientId = document.getElementById('clientId').value.trim();
+    var clientSecret = document.getElementById('clientSecret').value.trim();
+    document.getElementById('stravaConnect').disabled = !(clientId && clientSecret);
+  }
+  document.getElementById('clientId').addEventListener('input', updateConnectButton);
+  document.getElementById('clientSecret').addEventListener('input', updateConnectButton);
+
+  document.getElementById('stravaConnect').addEventListener('click', function() {
+    var clientId = document.getElementById('clientId').value.trim();
+    var clientSecret = document.getElementById('clientSecret').value.trim();
+    if (!clientId || !clientSecret) {
+      App.showMessage('error', 'Please enter both Client ID and Client Secret.');
+      return;
+    }
+    App.oauth.startAuth(clientId, clientSecret);
+  });
+
   // --- Helper: get credentials and refresh token ---
   async function getAccessToken() {
     var clientId = document.getElementById('clientId').value.trim();
@@ -422,6 +441,15 @@
       document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
       document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
       document.getElementById('rememberCreds').checked = true;
+      updateConnectButton();
+
+      // Show connected status if we have a refresh token
+      if (App.loadSetting('refreshToken', '')) {
+        var statusEl = document.getElementById('oauthStatus');
+        statusEl.textContent = 'Strava connected';
+        statusEl.className = 'oauth-status connected';
+        statusEl.style.display = '';
+      }
     }
     var savedOpacity = App.loadSetting('opacity', null);
     if (savedOpacity !== null) {
@@ -472,6 +500,68 @@
   (async function startup() {
     try {
       await App.storage.open();
+
+      // Handle OAuth callback if returning from Strava
+      try {
+        var oauthTokens = await App.oauth.handleCallback();
+        if (oauthTokens) {
+          // Populate form fields from the saved credentials
+          document.getElementById('clientId').value = App.loadSetting('clientId', '');
+          document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
+          document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
+          document.getElementById('rememberCreds').checked = true;
+          updateConnectButton();
+
+          // Show connected status
+          var statusEl = document.getElementById('oauthStatus');
+          var athleteName = oauthTokens.athlete ? (oauthTokens.athlete.firstname || '') : '';
+          statusEl.textContent = 'Connected' + (athleteName ? ' as ' + athleteName : '');
+          statusEl.className = 'oauth-status connected';
+          statusEl.style.display = '';
+          collapseCredsIfSaved();
+
+          // Auto-load activities using the fresh access token
+          var button = document.getElementById('fetchActivities');
+          var loading = document.getElementById('loading');
+          button.disabled = true;
+          loading.style.display = 'block';
+
+          try {
+            await App.storage.clear();
+            var fetched = await App.fetchActivities(oauthTokens.accessToken, 0, App.updateProgress);
+
+            if (fetched.length === 0) {
+              App.showMessage('error', 'No activities found');
+            } else {
+              App.activities = await App.storage.getAllActivities();
+              App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+              await App.storage.setMeta('lastSyncDate', new Date().toISOString());
+              updateCacheStatus(App.activities.length, new Date().toISOString());
+              showActivities(true);
+              App.showMessage('success', 'Connected and loaded ' + App.activities.length + ' activities!');
+            }
+          } catch (fetchErr) {
+            console.error('Auto-load error:', fetchErr);
+            App.showMessage('error', fetchErr.message);
+            var count = await App.storage.getCount();
+            if (count > 0) {
+              App.activities = await App.storage.getAllActivities();
+              App.activities.sort(function(a, b) { return a.start_date < b.start_date ? -1 : 1; });
+              updateCacheStatus(count, new Date().toISOString());
+              showActivities(true);
+            }
+          } finally {
+            loading.style.display = 'none';
+            button.disabled = false;
+          }
+          return; // Skip normal cache-first load
+        }
+      } catch (oauthErr) {
+        console.error('OAuth callback error:', oauthErr);
+        App.showMessage('error', oauthErr.message);
+      }
+
+      // Normal cache-first startup
       var count = await App.storage.getCount();
       if (count > 0) {
         var lastSync = await App.storage.getMeta('lastSyncDate');

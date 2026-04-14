@@ -241,6 +241,43 @@ html, body {
   overflow: hidden;
 }
 
+/* === Strava Connect Button === */
+.strava-connect-btn {
+  background: #fc4c02;
+  color: white;
+  font-weight: 600;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  margin: 8px 0;
+}
+
+.strava-connect-btn:hover:not(:disabled) {
+  background: #e04000;
+}
+
+.strava-connect-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* === OAuth Status === */
+.oauth-status {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.oauth-status.connected {
+  background: var(--cache-bg);
+  border: 1px solid var(--cache-border);
+  color: var(--cache-text);
+}
+
 /* === Cache Status === */
 .cache-status {
   display: flex;

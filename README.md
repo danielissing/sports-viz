@@ -4,15 +4,18 @@ A browser-based dashboard for visualizing your Strava activity data — heatmap,
 
 ## First-time setup
 
-1. **Create a Strava API application** at https://www.strava.com/settings/api (set the "Authorization Callback Domain" to `localhost`). Note your **Client ID** and **Client Secret**.
-2. **Run the authorization script once** to grant activity permissions and get your refresh token:
-   ```
-   python refresh_tokens.py
-   ```
-   It will open your browser for OAuth authorization and print the refresh token when done.
-3. **Open `strava-viz.html`** in your browser, enter your Client ID, Client Secret, and Refresh Token, check **"Remember credentials"**, and click **Load Activities**.
+1. **Create a Strava API application** at https://www.strava.com/settings/api.
+   - Set the **Authorization Callback Domain** to match where you'll host the app (e.g. `localhost`, `<username>.github.io`, or your custom domain).
+   - Note your **Client ID** and **Client Secret**.
+2. **Open `index.html`** in your browser (or visit the deployed GitHub Pages URL).
+3. Enter your **Client ID** and **Client Secret**, then click **Connect with Strava**.
+4. Authorize the app on Strava — you'll be redirected back and your activities will load automatically.
 
-That's it — you won't need to run the script again. The app automatically refreshes your access token on each load using the stored refresh token.
+That's it — credentials are saved in localStorage and your access token refreshes automatically on each visit.
+
+### Alternative: manual token entry
+
+If you already have a refresh token (e.g. from the `refresh_tokens.py` script), you can paste it directly into the Refresh Token field and click **Load All Activities** instead of using the Connect button.
 
 ## Features
 
