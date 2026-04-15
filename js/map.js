@@ -174,30 +174,47 @@
     }
   }
 
-  // --- Collapse credentials when saved ---
+  // --- Detect auth mode ---
+  var useConfig = App.oauth.hasConfig();
+
+  // Show the right auth UI
+  if (useConfig) {
+    document.getElementById('configuredAuth').style.display = '';
+    document.getElementById('manualAuth').style.display = 'none';
+  } else {
+    document.getElementById('configuredAuth').style.display = 'none';
+    document.getElementById('manualAuth').style.display = '';
+  }
+
+  // --- Collapse credentials when saved (manual mode only) ---
   function collapseCredsIfSaved() {
-    if (App.loadSetting('rememberCreds', false)) {
+    if (!useConfig && App.loadSetting('rememberCreds', false)) {
       document.getElementById('credsBody').classList.add('collapsed');
       document.getElementById('credsArrow').classList.add('collapsed');
     }
   }
 
-  // --- Credentials toggle ---
+  // --- Credentials toggle (manual mode) ---
   document.getElementById('credsToggle').addEventListener('click', function() {
     document.getElementById('credsBody').classList.toggle('collapsed');
     document.getElementById('credsArrow').classList.toggle('collapsed');
   });
 
-  // --- Connect with Strava button ---
+  // --- Connect with Strava button (configured mode) ---
+  document.getElementById('stravaConnect').addEventListener('click', function() {
+    App.oauth.startAuth();
+  });
+
+  // --- Connect with Strava button (manual mode) ---
   function updateConnectButton() {
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
-    document.getElementById('stravaConnect').disabled = !(clientId && clientSecret);
+    document.getElementById('stravaConnectManual').disabled = !(clientId && clientSecret);
   }
   document.getElementById('clientId').addEventListener('input', updateConnectButton);
   document.getElementById('clientSecret').addEventListener('input', updateConnectButton);
 
-  document.getElementById('stravaConnect').addEventListener('click', function() {
+  document.getElementById('stravaConnectManual').addEventListener('click', function() {
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
     if (!clientId || !clientSecret) {
@@ -209,31 +226,45 @@
 
   // --- Helper: get credentials and refresh token ---
   async function getAccessToken() {
-    var clientId = document.getElementById('clientId').value.trim();
-    var clientSecret = document.getElementById('clientSecret').value.trim();
-    var refreshTokenVal = document.getElementById('refreshToken').value.trim();
-    if (!clientId || !clientSecret || !refreshTokenVal) {
-      throw new Error('Please enter Client ID, Client Secret, and Refresh Token');
+    var clientId, clientSecret, refreshTokenVal;
+
+    if (useConfig) {
+      clientId = App.config.clientId;
+      clientSecret = App.config.clientSecret;
+      refreshTokenVal = App.loadSetting('refreshToken', '');
+    } else {
+      clientId = document.getElementById('clientId').value.trim();
+      clientSecret = document.getElementById('clientSecret').value.trim();
+      refreshTokenVal = document.getElementById('refreshToken').value.trim();
     }
+
+    if (!clientId || !clientSecret || !refreshTokenVal) {
+      throw new Error(useConfig
+        ? 'Please connect with Strava first.'
+        : 'Please enter Client ID, Client Secret, and Refresh Token');
+    }
+
     var tokens = await App.refreshAccessToken(clientId, clientSecret, refreshTokenVal);
     // Update rotated refresh token
     if (tokens.refreshToken !== refreshTokenVal) {
-      document.getElementById('refreshToken').value = tokens.refreshToken;
-      if (document.getElementById('rememberCreds').checked) {
-        App.saveSetting('refreshToken', tokens.refreshToken);
+      App.saveSetting('refreshToken', tokens.refreshToken);
+      if (!useConfig) {
+        document.getElementById('refreshToken').value = tokens.refreshToken;
       }
     }
-    // Persist credentials
-    if (document.getElementById('rememberCreds').checked) {
-      App.saveSetting('clientId', clientId);
-      App.saveSetting('clientSecret', clientSecret);
-      App.saveSetting('refreshToken', document.getElementById('refreshToken').value.trim());
-      App.saveSetting('rememberCreds', true);
-    } else {
-      App.removeSetting('clientId');
-      App.removeSetting('clientSecret');
-      App.removeSetting('refreshToken');
-      App.removeSetting('rememberCreds');
+    // Persist credentials (manual mode only)
+    if (!useConfig) {
+      if (document.getElementById('rememberCreds').checked) {
+        App.saveSetting('clientId', clientId);
+        App.saveSetting('clientSecret', clientSecret);
+        App.saveSetting('refreshToken', tokens.refreshToken);
+        App.saveSetting('rememberCreds', true);
+      } else {
+        App.removeSetting('clientId');
+        App.removeSetting('clientSecret');
+        App.removeSetting('refreshToken');
+        App.removeSetting('rememberCreds');
+      }
     }
     return tokens.accessToken;
   }
@@ -436,16 +467,23 @@
 
   // --- Restore settings on load ---
   (function restoreSettings() {
-    if (App.loadSetting('rememberCreds', false)) {
+    if (useConfig) {
+      // Config mode: show connected status if we have a refresh token
+      if (App.loadSetting('refreshToken', '')) {
+        var statusEl = document.getElementById('oauthStatus');
+        statusEl.textContent = 'Strava connected';
+        statusEl.className = 'oauth-status connected';
+        statusEl.style.display = '';
+      }
+    } else if (App.loadSetting('rememberCreds', false)) {
       document.getElementById('clientId').value = App.loadSetting('clientId', '');
       document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
       document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
       document.getElementById('rememberCreds').checked = true;
       updateConnectButton();
 
-      // Show connected status if we have a refresh token
       if (App.loadSetting('refreshToken', '')) {
-        var statusEl = document.getElementById('oauthStatus');
+        var statusEl = document.getElementById('oauthStatusManual');
         statusEl.textContent = 'Strava connected';
         statusEl.className = 'oauth-status connected';
         statusEl.style.display = '';
@@ -505,20 +543,22 @@
       try {
         var oauthTokens = await App.oauth.handleCallback();
         if (oauthTokens) {
-          // Populate form fields from the saved credentials
-          document.getElementById('clientId').value = App.loadSetting('clientId', '');
-          document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
-          document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
-          document.getElementById('rememberCreds').checked = true;
-          updateConnectButton();
-
           // Show connected status
           var statusEl = document.getElementById('oauthStatus');
           var athleteName = oauthTokens.athlete ? (oauthTokens.athlete.firstname || '') : '';
           statusEl.textContent = 'Connected' + (athleteName ? ' as ' + athleteName : '');
           statusEl.className = 'oauth-status connected';
           statusEl.style.display = '';
-          collapseCredsIfSaved();
+
+          if (!useConfig) {
+            // Manual mode: populate form fields
+            document.getElementById('clientId').value = App.loadSetting('clientId', '');
+            document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
+            document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
+            document.getElementById('rememberCreds').checked = true;
+            updateConnectButton();
+            collapseCredsIfSaved();
+          }
 
           // Auto-load activities using the fresh access token
           var button = document.getElementById('fetchActivities');

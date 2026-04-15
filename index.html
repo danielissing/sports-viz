@@ -25,23 +25,30 @@
     <div class="controls" id="mapControls">
       <h3>Strava Sports Viz</h3>
 
-      <!-- Collapsible credentials section -->
+      <!-- Strava connection -->
       <div id="credentialsSection">
-        <div class="creds-header" id="credsToggle">
-          <span>API Credentials</span>
-          <span class="creds-arrow" id="credsArrow">&#9660;</span>
-        </div>
-        <div class="creds-body" id="credsBody">
-          <input type="text" id="clientId" placeholder="Client ID" />
-          <input type="password" id="clientSecret" placeholder="Client Secret" />
-          <button type="button" id="stravaConnect" class="strava-connect-btn" disabled>Connect with Strava</button>
-          <div class="help-text">Enter Client ID &amp; Secret from your <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API app</a>, then click Connect.</div>
+        <div id="configuredAuth" style="display:none;">
+          <button type="button" id="stravaConnect" class="strava-connect-btn">Connect with Strava</button>
+          <div class="help-text">Click to authorize access to your Strava activities.</div>
           <div id="oauthStatus" style="display:none;"></div>
-          <input type="password" id="refreshToken" placeholder="Refresh Token (auto-filled by Connect)" />
-          <label style="display:flex;align-items:center;gap:6px;margin:6px 0;">
-            <input type="checkbox" id="rememberCreds" style="width:auto;margin:0;" />
-            <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
-          </label>
+        </div>
+        <div id="manualAuth">
+          <div class="creds-header" id="credsToggle">
+            <span>API Credentials</span>
+            <span class="creds-arrow" id="credsArrow">&#9660;</span>
+          </div>
+          <div class="creds-body" id="credsBody">
+            <input type="text" id="clientId" placeholder="Client ID" />
+            <input type="password" id="clientSecret" placeholder="Client Secret" />
+            <button type="button" id="stravaConnectManual" class="strava-connect-btn" disabled>Connect with Strava</button>
+            <div class="help-text">Enter Client ID &amp; Secret from your <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API app</a>, then click Connect.</div>
+            <div id="oauthStatusManual" style="display:none;"></div>
+            <input type="password" id="refreshToken" placeholder="Refresh Token (auto-filled by Connect)" />
+            <label style="display:flex;align-items:center;gap:6px;margin:6px 0;">
+              <input type="checkbox" id="rememberCreds" style="width:auto;margin:0;" />
+              <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -151,6 +158,7 @@
 
   <!-- App Scripts (load order matters) -->
   <script src="js/utils.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/oauth.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/strava-api.js"></script>
