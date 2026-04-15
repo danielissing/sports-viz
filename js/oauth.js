@@ -1,37 +1,18 @@
 (function() {
   var App = window.StravaApp;
 
-  function getCredentials() {
-    if (App.config && App.config.clientId && App.config.clientSecret) {
-      return { clientId: App.config.clientId, clientSecret: App.config.clientSecret };
-    }
-    return null;
-  }
-
   App.oauth = {
-    hasConfig: function() {
-      return !!getCredentials();
-    },
-
     getRedirectUri: function() {
       return window.location.origin + window.location.pathname;
     },
 
     startAuth: function(clientId, clientSecret) {
-      var creds = getCredentials();
-      var id = clientId || (creds && creds.clientId);
-      var secret = clientSecret || (creds && creds.clientSecret);
-
-      if (!id || !secret) {
-        throw new Error('No Strava API credentials available.');
-      }
-
       // Save credentials temporarily for retrieval after redirect
-      localStorage.setItem('oauth_clientId', id);
-      localStorage.setItem('oauth_clientSecret', secret);
+      localStorage.setItem('oauth_clientId', clientId);
+      localStorage.setItem('oauth_clientSecret', clientSecret);
 
       var params = new URLSearchParams({
-        client_id: id,
+        client_id: clientId,
         redirect_uri: this.getRedirectUri(),
         response_type: 'code',
         scope: 'read,activity:read_all,profile:read_all',
@@ -90,10 +71,9 @@
           : 'Authorization failed: ' + result.error);
       }
 
-      // Retrieve credentials: prefer config, fall back to localStorage temp keys
-      var creds = getCredentials();
-      var clientId = creds ? creds.clientId : localStorage.getItem('oauth_clientId');
-      var clientSecret = creds ? creds.clientSecret : localStorage.getItem('oauth_clientSecret');
+      // Retrieve saved credentials
+      var clientId = localStorage.getItem('oauth_clientId');
+      var clientSecret = localStorage.getItem('oauth_clientSecret');
 
       if (!clientId || !clientSecret) {
         throw new Error('Credentials lost after redirect. Please enter your Client ID and Secret and try again.');
@@ -102,15 +82,11 @@
       // Exchange authorization code for tokens
       var data = await this.exchangeCode(result.code, clientId, clientSecret);
 
-      // Save refresh token (always needed per-user)
+      // Save tokens using existing App settings
+      App.saveSetting('clientId', clientId);
+      App.saveSetting('clientSecret', clientSecret);
       App.saveSetting('refreshToken', data.refresh_token);
-
-      // Save manual credentials if not using config
-      if (!creds) {
-        App.saveSetting('clientId', clientId);
-        App.saveSetting('clientSecret', clientSecret);
-        App.saveSetting('rememberCreds', true);
-      }
+      App.saveSetting('rememberCreds', true);
 
       // Clean up temporary keys
       localStorage.removeItem('oauth_clientId');
