@@ -2,20 +2,22 @@
 
 A browser-based dashboard for visualizing your Strava activity data — heatmap, training stats, personal bests, and more. No server required; everything runs client-side from a single HTML file.
 
-## First-time setup
+## Getting started
+
+1. **Open the app** — visit the deployed GitHub Pages URL (or open `index.html` locally).
+2. **Click "Connect with Strava"** — you'll be redirected to Strava to authorize the app.
+3. **Done** — your activities load automatically and are cached in IndexedDB for fast reloads.
+
+Your refresh token is saved in localStorage so you stay connected across sessions. Use **Sync New Activities** to pull only what's new since your last load.
+
+### Self-hosting / development
+
+If you want to run your own instance instead of using the shared deployment:
 
 1. **Create a Strava API application** at https://www.strava.com/settings/api.
-   - Set the **Authorization Callback Domain** to match where you'll host the app (e.g. `localhost`, `<username>.github.io`, or your custom domain).
-   - Note your **Client ID** and **Client Secret**.
-2. **Open `index.html`** in your browser (or visit the deployed GitHub Pages URL).
-3. Enter your **Client ID** and **Client Secret**, then click **Connect with Strava**.
-4. Authorize the app on Strava — you'll be redirected back and your activities will load automatically.
-
-That's it — credentials are saved in localStorage and your access token refreshes automatically on each visit.
-
-### Alternative: manual token entry
-
-If you already have a refresh token (e.g. from the `refresh_tokens.py` script), you can paste it directly into the Refresh Token field and click **Load All Activities** instead of using the Connect button.
+2. **Deploy a Cloudflare Worker** (see `worker/strava-proxy.js`) with your Client ID and Client Secret as secrets.
+3. **Update `js/config.js`** with your own Worker URL and Client ID.
+4. Set your **Authorization Callback Domain** in Strava to match where you host the Worker.
 
 ## Features
 
@@ -28,9 +30,14 @@ If you already have a refresh token (e.g. from the `refresh_tokens.py` script), 
 
 ### Stats dashboard
 - **Activity Breakdown** — doughnut snapshot or stacked area over time, with small sports grouped as "Other"
+- **Year in Sport** — summary stats for the selected year
 - **Training Volume** — stacked bar (weekly/monthly/yearly), Year-over-Year comparison, and Cumulative YTD overlay
-- **Personal Bests** — records per sport with Strava links, plus Best Efforts for standard run distances (5K, 10K, HM, Marathon)
-- **Activity Character** — bubble chart (distance vs elevation) and Pace Trend scatter with regression lines
+- **Personal Bests** — per-sport records (longest distance, longest duration, most elevation, fastest pace / highest speed) with Strava links and suspicious-activity flagging
 - **Streaks & Consistency** — contribution grid and streak stats
+- **Activity Character** — bubble chart (distance vs elevation) with per-sport typical stats
 
-All UI settings persist across page reloads via localStorage.
+### Other
+- Dark mode (auto-detects system preference, manual toggle in tab bar)
+- All UI settings persist across page reloads via localStorage
+- Activities cached in IndexedDB with incremental sync support
+- Unit tests via `test.html` (zero-dependency test runner)

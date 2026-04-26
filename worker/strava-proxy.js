@@ -7,10 +7,9 @@ const ALLOWED_ORIGINS = [
 function isAllowedOrigin(origin) {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.includes(origin)) return true;
-  // Allow any *.streamlit.app subdomain
   try {
     const url = new URL(origin);
-    return url.hostname.endsWith('.streamlit.app');
+    return url.hostname === 'race-predictor-test.streamlit.app';
   } catch {
     return false;
   }
@@ -20,7 +19,7 @@ function isAllowedRedirect(url) {
   try {
     const parsed = new URL(url);
     if (ALLOWED_ORIGINS.includes(parsed.origin)) return true;
-    return parsed.hostname.endsWith('.streamlit.app');
+    return parsed.hostname === 'race-predictor-test.streamlit.app';
   } catch {
     return false;
   }
@@ -64,6 +63,12 @@ export default {
       const cors = corsHeaders(request);
       try {
         const body = await request.json();
+        if (!body.code) {
+          return new Response(JSON.stringify({ error: 'Missing required field: code' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...cors },
+          });
+        }
         const resp = await fetch('https://www.strava.com/oauth/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -92,6 +97,12 @@ export default {
       const cors = corsHeaders(request);
       try {
         const body = await request.json();
+        if (!body.refresh_token) {
+          return new Response(JSON.stringify({ error: 'Missing required field: refresh_token' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...cors },
+          });
+        }
         const resp = await fetch('https://www.strava.com/oauth/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
