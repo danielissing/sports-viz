@@ -19,6 +19,9 @@ env/
 venv/
 .venv
 
+# Wrangler (Cloudflare Worker credentials/cache)
+.wrangler/
+
 # Claude Code
 .claude/
 
