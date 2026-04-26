@@ -32,16 +32,8 @@
           <span class="creds-arrow" id="credsArrow">&#9660;</span>
         </div>
         <div class="creds-body" id="credsBody">
-          <input type="text" id="clientId" placeholder="Client ID" class="manual-creds" />
-          <input type="password" id="clientSecret" placeholder="Client Secret" class="manual-creds" />
-          <button type="button" id="stravaConnect" class="strava-connect-btn" disabled>Connect with Strava</button>
-          <div class="help-text manual-creds">Enter Client ID &amp; Secret from your <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener">Strava API app</a>, then click Connect.</div>
+          <button type="button" id="stravaConnect" class="strava-connect-btn">Connect with Strava</button>
           <div id="oauthStatus" style="display:none;"></div>
-          <input type="password" id="refreshToken" placeholder="Refresh Token (auto-filled by Connect)" class="manual-creds" />
-          <label style="display:flex;align-items:center;gap:6px;margin:6px 0;" class="manual-creds">
-            <input type="checkbox" id="rememberCreds" style="width:auto;margin:0;" />
-            <span class="help-text" style="margin:0;">Remember credentials in localStorage</span>
-          </label>
         </div>
       </div>
 
@@ -163,18 +155,6 @@
   <script src="js/charts-streaks.js"></script>
   <script src="js/charts-character.js"></script>
   <script src="js/charts-summary.js"></script>
-
-  <!-- Hide manual credential fields when shared config is active -->
-  <script>
-  (function() {
-    if (window.StravaApp && window.StravaApp.config) {
-      var els = document.querySelectorAll('.manual-creds');
-      for (var i = 0; i < els.length; i++) {
-        els[i].style.display = 'none';
-      }
-    }
-  })();
-  </script>
 
 </body>
 </html>
