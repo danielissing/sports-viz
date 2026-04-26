@@ -190,14 +190,25 @@
 
   // --- Connect with Strava button ---
   function updateConnectButton() {
+    if (App.config) {
+      // Shared mode: always enabled
+      document.getElementById('stravaConnect').disabled = false;
+      return;
+    }
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
     document.getElementById('stravaConnect').disabled = !(clientId && clientSecret);
   }
-  document.getElementById('clientId').addEventListener('input', updateConnectButton);
-  document.getElementById('clientSecret').addEventListener('input', updateConnectButton);
+  if (!App.config) {
+    document.getElementById('clientId').addEventListener('input', updateConnectButton);
+    document.getElementById('clientSecret').addEventListener('input', updateConnectButton);
+  }
 
   document.getElementById('stravaConnect').addEventListener('click', function() {
+    if (App.config) {
+      App.oauth.startAuth();
+      return;
+    }
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
     if (!clientId || !clientSecret) {
@@ -209,9 +220,24 @@
 
   // --- Helper: get credentials and refresh token ---
   async function getAccessToken() {
+    var refreshTokenVal;
+    if (App.config) {
+      // Shared mode: only need refresh token
+      refreshTokenVal = App.loadSetting('refreshToken', '');
+      if (!refreshTokenVal) {
+        throw new Error('Not connected to Strava. Click "Connect with Strava" first.');
+      }
+      var tokens = await App.refreshAccessToken(null, null, refreshTokenVal);
+      if (tokens.refreshToken !== refreshTokenVal) {
+        App.saveSetting('refreshToken', tokens.refreshToken);
+      }
+      return tokens.accessToken;
+    }
+
+    // Manual mode: need all credentials
     var clientId = document.getElementById('clientId').value.trim();
     var clientSecret = document.getElementById('clientSecret').value.trim();
-    var refreshTokenVal = document.getElementById('refreshToken').value.trim();
+    refreshTokenVal = document.getElementById('refreshToken').value.trim();
     if (!clientId || !clientSecret || !refreshTokenVal) {
       throw new Error('Please enter Client ID, Client Secret, and Refresh Token');
     }
@@ -436,7 +462,16 @@
 
   // --- Restore settings on load ---
   (function restoreSettings() {
-    if (App.loadSetting('rememberCreds', false)) {
+    if (App.config) {
+      // Shared mode: show connected status if we have a refresh token
+      if (App.loadSetting('refreshToken', '')) {
+        var statusEl = document.getElementById('oauthStatus');
+        statusEl.textContent = 'Strava connected';
+        statusEl.className = 'oauth-status connected';
+        statusEl.style.display = '';
+      }
+      updateConnectButton();
+    } else if (App.loadSetting('rememberCreds', false)) {
       document.getElementById('clientId').value = App.loadSetting('clientId', '');
       document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
       document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
@@ -505,11 +540,13 @@
       try {
         var oauthTokens = await App.oauth.handleCallback();
         if (oauthTokens) {
-          // Populate form fields from the saved credentials
-          document.getElementById('clientId').value = App.loadSetting('clientId', '');
-          document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
-          document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
-          document.getElementById('rememberCreds').checked = true;
+          if (!App.config) {
+            // Manual mode: populate form fields from the saved credentials
+            document.getElementById('clientId').value = App.loadSetting('clientId', '');
+            document.getElementById('clientSecret').value = App.loadSetting('clientSecret', '');
+            document.getElementById('refreshToken').value = App.loadSetting('refreshToken', '');
+            document.getElementById('rememberCreds').checked = true;
+          }
           updateConnectButton();
 
           // Show connected status

@@ -2,16 +2,27 @@
   var App = window.StravaApp;
 
   App.refreshAccessToken = async function(clientId, clientSecret, refreshToken) {
-    var body = new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
-    });
-    var resp = await fetch('https://www.strava.com/oauth/token', {
-      method: 'POST',
-      body: body
-    });
+    var resp;
+    if (App.config) {
+      // Shared mode: POST to Worker (adds secret server-side)
+      resp = await fetch(App.config.workerUrl + '/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+    } else {
+      // Manual mode: direct to Strava with full credentials
+      var body = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken
+      });
+      resp = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        body: body
+      });
+    }
     if (!resp.ok) {
       var text = await resp.text();
       throw new Error('Token refresh failed (' + resp.status + '): ' + text);
