@@ -8,14 +8,18 @@
   var routeLayers = [];
   var heatLayer = null;
   var mapInstance = L.map('map').setView([40.7128, -74.0060], 11);
+
+  var cartoKey = 'cb1_537n_1_a39156fbbc02fdab89d6846e';
+
   var tileLayers = {
-    street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '\u00a9 OpenStreetMap contributors \u00a9 CARTO', maxZoom: 19 }),
-    satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '\u00a9 Esri', maxZoom: 19 }),
-    terrain: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { attribution: '\u00a9 Esri', maxZoom: 19 }),
-    light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '\u00a9 OpenStreetMap contributors \u00a9 CARTO', maxZoom: 19 }),
-    dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '\u00a9 OpenStreetMap contributors \u00a9 CARTO', maxZoom: 19 }),
-    outdoors: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '\u00a9 OpenTopoMap contributors \u00a9 OpenStreetMap contributors', maxZoom: 17 })
+    street: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=' + cartoKey, { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+    satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 }),
+    terrain: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { attribution: '© Esri', maxZoom: 19 }),
+    light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=' + cartoKey, { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+    dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=' + cartoKey, { attribution: '© OpenStreetMap contributors © CARTO', maxZoom: 19 }),
+    outdoors: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '© OpenTopoMap contributors © OpenStreetMap contributors', maxZoom: 17 })
   };
+
   var currentTileLayer = tileLayers.light;
   currentTileLayer.addTo(mapInstance);
 
